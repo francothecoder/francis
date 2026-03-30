@@ -1,6 +1,6 @@
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
-
+DROP TABLE IF EXISTS lenco_webhook_logs;
 DROP TABLE IF EXISTS notifications;
 DROP TABLE IF EXISTS tutor_ratings;
 DROP TABLE IF EXISTS session_messages;
@@ -18,7 +18,6 @@ DROP TABLE IF EXISTS user_rewards;
 DROP TABLE IF EXISTS tutor_profiles;
 DROP TABLE IF EXISTS settings;
 DROP TABLE IF EXISTS users;
-
 SET FOREIGN_KEY_CHECKS = 1;
 
 CREATE TABLE users (
@@ -90,6 +89,7 @@ CREATE TABLE user_subscriptions (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     user_id INT UNSIGNED NOT NULL,
     plan_id INT UNSIGNED NOT NULL,
+    payment_transaction_id INT UNSIGNED NULL,
     starts_at DATETIME NOT NULL,
     ends_at DATETIME NOT NULL,
     status ENUM('active','expired','cancelled') NOT NULL DEFAULT 'active',
@@ -102,8 +102,12 @@ CREATE TABLE resources (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     title VARCHAR(190) NOT NULL,
     resource_type VARCHAR(100) NOT NULL,
+    excerpt VARCHAR(255) NULL,
     content LONGTEXT NOT NULL,
     access_level ENUM('free','starter','plus','pro') NOT NULL DEFAULT 'free',
+    attachment_path VARCHAR(255) NULL,
+    attachment_name VARCHAR(190) NULL,
+    external_url VARCHAR(255) NULL,
     created_by INT UNSIGNED NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_resources_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
@@ -121,7 +125,7 @@ CREATE TABLE help_requests (
     suggested_budget DECIMAL(10,2) NOT NULL DEFAULT 0,
     reward_credits_to_use INT UNSIGNED NOT NULL DEFAULT 0,
     attachment_path VARCHAR(255) NULL,
-    status ENUM('open','quoted','accepted','in_progress','completed','cancelled') NOT NULL DEFAULT 'open',
+    status ENUM('open','quoted','accepted','awaiting_payment','payment_pending','in_progress','completed','cancelled') NOT NULL DEFAULT 'open',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_help_requests_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT fk_help_requests_tutor FOREIGN KEY (selected_tutor_id) REFERENCES users(id) ON DELETE SET NULL
@@ -160,7 +164,9 @@ CREATE TABLE session_messages (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     session_id INT UNSIGNED NOT NULL,
     sender_id INT UNSIGNED NOT NULL,
-    message TEXT NOT NULL,
+    message TEXT NULL,
+    attachment_path VARCHAR(255) NULL,
+    attachment_name VARCHAR(190) NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_session_messages_session FOREIGN KEY (session_id) REFERENCES study_sessions(id) ON DELETE CASCADE,
     CONSTRAINT fk_session_messages_sender FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE
@@ -170,18 +176,30 @@ CREATE TABLE payment_transactions (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     request_id INT UNSIGNED NULL,
     session_id INT UNSIGNED NULL,
+    plan_id INT UNSIGNED NULL,
     student_id INT UNSIGNED NOT NULL,
     tutor_id INT UNSIGNED NULL,
+    payment_type ENUM('help_request','subscription') NOT NULL,
     amount DECIMAL(10,2) NOT NULL,
+    base_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
     discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
     reward_credit_value DECIMAL(10,2) NOT NULL DEFAULT 0,
     platform_fee DECIMAL(10,2) NOT NULL DEFAULT 0,
     tutor_earnings DECIMAL(10,2) NOT NULL DEFAULT 0,
-    status ENUM('held','released','paid','refunded') NOT NULL DEFAULT 'paid',
+    provider VARCHAR(30) NULL,
+    phone_number VARCHAR(25) NULL,
+    gateway VARCHAR(30) NOT NULL DEFAULT 'lenco',
+    gateway_reference VARCHAR(100) NOT NULL UNIQUE,
+    lenco_reference VARCHAR(100) NULL,
+    gateway_status VARCHAR(40) NULL,
+    gateway_payload LONGTEXT NULL,
+    status ENUM('pending','held','released','paid','failed','refunded') NOT NULL DEFAULT 'pending',
     notes VARCHAR(255) NULL,
+    paid_at DATETIME NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_payment_transactions_request FOREIGN KEY (request_id) REFERENCES help_requests(id) ON DELETE SET NULL,
     CONSTRAINT fk_payment_transactions_session FOREIGN KEY (session_id) REFERENCES study_sessions(id) ON DELETE SET NULL,
+    CONSTRAINT fk_payment_transactions_plan FOREIGN KEY (plan_id) REFERENCES subscription_plans(id) ON DELETE SET NULL,
     CONSTRAINT fk_payment_transactions_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT fk_payment_transactions_tutor FOREIGN KEY (tutor_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -232,9 +250,21 @@ CREATE TABLE notifications (
     CONSTRAINT fk_notifications_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE lenco_webhook_logs (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    event_name VARCHAR(100) NULL,
+    gateway_reference VARCHAR(100) NULL,
+    payload LONGTEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 INSERT INTO settings (setting_key, setting_value) VALUES
 ('platform_commission_percent', '20'),
-('platform_name', 'Academic Support Hub');
+('platform_name', 'Academic Support Hub'),
+('lenco_mode', 'sandbox'),
+('lenco_public_key', ''),
+('lenco_secret_key', ''),
+('lenco_callback_url', '');
 
 INSERT INTO users (name, email, password, role, university, bio) VALUES
 ('Admin User', 'admin@academicsupporthub.com', '$2y$12$gz2cseFerWijZXl1IhiiQO3dgPyPuHhg2r9xBb/tVgIY/8LAAeZP6', 'admin', 'Platform Admin', 'Main administrator'),
@@ -257,10 +287,14 @@ INSERT INTO subscription_plans (name, monthly_price, help_discount_percent, mont
 INSERT INTO user_subscriptions (user_id, plan_id, starts_at, ends_at, status) VALUES
 (2, 2, NOW(), DATE_ADD(NOW(), INTERVAL 30 DAY), 'active');
 
-INSERT INTO resources (title, resource_type, content, access_level, created_by) VALUES
-('How to structure a strong final-year system proposal', 'Guide', 'Start with the problem statement, define measurable objectives, map users clearly, and keep your scope realistic for your course calendar.', 'free', 1),
-('Documentation outline for PHP academic systems', 'Template', 'Chapter 1: Introduction\nChapter 2: Literature Review\nChapter 3: Methodology\nChapter 4: System Design\nChapter 5: Testing, Findings and Conclusion', 'starter', 1),
-('Database normalization revision note', 'Revision Note', 'A quick breakdown of 1NF, 2NF, and 3NF with simple examples for academic systems.', 'plus', 1);
+INSERT INTO resources (title, resource_type, excerpt, content, access_level, attachment_name, external_url, created_by) VALUES
+('How to structure a strong final-year system proposal', 'Guide', 'Break down chapters, scope, and deliverables for a stronger academic proposal.', 'Start with the problem statement, define measurable objectives, map users clearly, and keep your scope realistic for your course calendar.', 'free', NULL, NULL, 1),
+('Documentation outline for PHP academic systems', 'Template', 'A quick chapter-by-chapter outline for student documentation work.', 'Chapter 1: Introduction
+Chapter 2: Literature Review
+Chapter 3: Methodology
+Chapter 4: System Design
+Chapter 5: Testing, Findings and Conclusion', 'starter', NULL, NULL, 1),
+('Database normalization revision note', 'Revision Note', 'A compact note for 1NF, 2NF and 3NF revision.', 'A quick breakdown of 1NF, 2NF, and 3NF with simple examples for academic systems.', 'plus', NULL, NULL, 1);
 
 INSERT INTO help_requests (student_id, selected_tutor_id, subject, title, details, urgency, suggested_budget, reward_credits_to_use, status) VALUES
 (2, NULL, 'ICT', 'Need help breaking down a school management ERD', 'I need help understanding users, entities, and relationships for a simple school system ERD before submission.', 'normal', 30.00, 1, 'quoted');

@@ -1,62 +1,38 @@
-ACADEMIC SUPPORT HUB
-====================
+Academic Support Hub - Premium PHP Edition
+=========================================
 
-A native PHP academic support platform with:
+Default admin login
+- Email: admin@academicsupporthub.com
+- Password: password123
 
-- student / tutor / admin roles
-- tutor verification
-- student help requests
-- tutor offers
-- accepted session workflow
-- session chat thread
-- monthly academic subscriptions
-- XP, levels, reward credits
-- tutor ratings
-- platform commission control
-- payout requests and admin payout approval
-- academic resources module
+Sample student login
+- Email: student@example.com
+- Password: password123
 
-SETUP
------
-1. Create a MySQL database.
-2. Edit config/database.php with your database credentials.
-3. Import database.sql into the database.
-4. Copy the folder to your web root.
-5. Update BASE_URL in config/config.php if your folder name is different.
-6. Login with seeded accounts below.
+Sample tutor login
+- Email: tutor@example.com
+- Password: password123
 
-DEMO ACCOUNTS
--------------
-Admin
-Email: admin@academicsupporthub.com
-Password: password123
+Key upgrades included
+- Premium refreshed UI with cleaner cards and navigation
+- Resource publishing with downloadable attachments and optional reference links
+- Session chat now supports file attachments
+- Lenco mobile money payment workflow for subscriptions and tutor sessions
+- Payment status page with manual refresh/requery support
+- Webhook endpoint for Lenco callback updates
+- Request flow now separates offer acceptance from payment confirmation
+- Improved settings page for payment gateway configuration
 
-Student
-Email: student@example.com
-Password: student123
+Setup
+1. Extract the ZIP into your web root.
+2. Create a MySQL database.
+3. Import database.sql.
+4. Update config/database.php or set DB_* environment variables.
+5. Update BASE_URL in config/config.php or set BASE_URL env variable.
+6. In Admin > Settings, add your Lenco public key, secret key, mode, and callback URL.
+7. In your Lenco dashboard, point the callback/webhook URL to: /webhook/lenco.php
 
-Tutor
-Email: tutor@example.com
-Password: tutor12345
-
-NOTES
------
-- This package uses manual internal payment records, not live mobile money APIs.
-- File uploads are validated by extension, MIME type, and size.
-- CSRF protection is enabled for all major forms.
-- This is a strong native PHP starter for production-minded deployment, but before live launch you should still add:
-  - HTTPS on hosting
-  - stronger audit logging
-  - email notifications
-  - payment gateway integration
-  - cron tasks for expiring subscriptions
-  - server hardening and backup automation
-
-FOLDER HIGHLIGHTS
------------------
-/admin      platform control
-/student    student workflows
-/tutor      tutor workflows
-/includes   shared bootstrap, helpers, layout
-/config     database configuration
-/database.sql full schema + seed data
+Notes
+- For local testing, leave Lenco in sandbox mode until your callback URL is publicly reachable.
+- The system can still be used without Lenco configured, but live payment buttons are disabled.
+- Re-import database.sql for the new schema.
