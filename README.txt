@@ -36,3 +36,13 @@ Notes
 - For local testing, leave Lenco in sandbox mode until your callback URL is publicly reachable.
 - The system can still be used without Lenco configured, but live payment buttons are disabled.
 - Re-import database.sql for the new schema.
+
+
+Premium update notes (payments + email)
+-------------------------------------
+- Mobile money now normalizes Zambia numbers to 260XXXXXXXXX before sending to Lenco.
+- The Lenco payload now sends both provider and operator fields, stores gateway failure reasons in payment notes, and writes diagnostics to logs/lenco_gateway.log.
+- Payment status now treats pay-offline as pending so students can approve on phone and refresh safely.
+- Webhook payloads are logged to logs/lenco_webhook.log for troubleshooting.
+- PHPMailer is bundled in vendor/phpmailer/src and SMTP settings are available in Admin > Settings.
+- To enable emails, fill SMTP host, port, username, password, from email/name, then turn on SMTP and email notifications.

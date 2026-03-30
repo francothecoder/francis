@@ -264,7 +264,18 @@ INSERT INTO settings (setting_key, setting_value) VALUES
 ('lenco_mode', 'sandbox'),
 ('lenco_public_key', ''),
 ('lenco_secret_key', ''),
-('lenco_callback_url', '');
+('lenco_callback_url', ''),
+('smtp_enabled', '0'),
+('smtp_host', ''),
+('smtp_port', '587'),
+('smtp_username', ''),
+('smtp_password', ''),
+('smtp_encryption', 'tls'),
+('smtp_from_email', ''),
+('smtp_from_name', 'Academic Support Hub'),
+('smtp_reply_to_email', ''),
+('smtp_reply_to_name', 'Academic Support Hub'),
+('email_notifications_enabled', '1');
 
 INSERT INTO users (name, email, password, role, university, bio) VALUES
 ('Admin User', 'admin@academicsupporthub.com', '$2y$12$gz2cseFerWijZXl1IhiiQO3dgPyPuHhg2r9xBb/tVgIY/8LAAeZP6', 'admin', 'Platform Admin', 'Main administrator'),

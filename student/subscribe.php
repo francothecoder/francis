@@ -12,7 +12,7 @@ $existing = payment_for_subscription((int)$user['id'], (int)$plan['id']);
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
     $provider = strtolower(clean_text($_POST['provider'] ?? 'mtn'));
-    $phone = clean_text($_POST['phone_number'] ?? '');
+    $phone = normalize_zambian_phone(clean_text($_POST['phone_number'] ?? ''));
     if ($phone === '') { set_flash('error', 'Enter the mobile money phone number.'); redirect_to('student/subscribe.php?plan=' . $planId); }
     try {
         if ($existing && in_array($existing['status'], ['pending','failed'], true)) {
@@ -31,7 +31,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $paymentRowStmt = $pdo->prepare('SELECT * FROM payment_transactions WHERE id = :id LIMIT 1'); $paymentRowStmt->execute(['id'=>$paymentId]); $paymentRow = $paymentRowStmt->fetch();
         $response = initiate_lenco_collection($paymentRow, $phone, $provider, (string)$user['email'], (string)$user['name']);
         update_payment_gateway_snapshot($paymentId, $response);
-        set_flash('success', 'Payment prompt sent. Approve it on your phone, then refresh the payment status page.');
+        $gatewayMessage = payment_gateway_public_message($response);
+        if (($response['data']['status'] ?? '') === 'failed') {
+            set_flash('error', $gatewayMessage);
+        } else {
+            set_flash('success', $gatewayMessage);
+        }
         redirect_to('student/payment_status.php?payment_id=' . $paymentId);
     } catch (Throwable $e) {
         set_flash('error', $e->getMessage());
@@ -53,7 +58,7 @@ include __DIR__ . '/../includes/header.php';
                         <div class="provider-option"><input id="provider-<?= e($key) ?>" type="radio" name="provider" value="<?= e($key) ?>" <?= $key==='mtn'?'checked':'' ?>><label for="provider-<?= e($key) ?>"><?= e($label) ?></label></div>
                     <?php endforeach; ?>
                 </div>
-                <div class="mb-3"><label class="form-label">Phone number</label><input class="form-control" type="text" name="phone_number" placeholder="2609XXXXXXXX" required></div>
+                <div class="mb-3"><label class="form-label">Phone number</label><input class="form-control" type="text" name="phone_number" placeholder="097XXXXXXX or 26097XXXXXXX" required></div>
                 <div class="d-flex flex-wrap gap-2"><button class="btn btn-primary" <?= lenco_enabled() ? '' : 'disabled' ?>>Request payment</button><a class="btn btn-outline-secondary" href="<?= app_url('student/subscriptions.php') ?>">Back</a></div>
             </form>
         </div>

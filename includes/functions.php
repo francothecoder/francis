@@ -112,6 +112,156 @@ function update_setting(string $key, string $value): void
     $stmt->execute(['setting_key' => $key, 'setting_value' => $value]);
 }
 
+function ensure_directory(string $path): void
+{
+    if (!is_dir($path) && !mkdir($path, 0775, true) && !is_dir($path)) {
+        throw new RuntimeException('Unable to create directory: ' . $path);
+    }
+}
+
+function app_log(string $channel, string $message, array $context = []): void
+{
+    $logDir = BASE_PATH . '/logs';
+    if (!is_dir($logDir)) {
+        @mkdir($logDir, 0775, true);
+    }
+    $entry = [
+        'time' => date('Y-m-d H:i:s'),
+        'channel' => $channel,
+        'message' => $message,
+        'context' => $context,
+    ];
+    @file_put_contents($logDir . '/' . preg_replace('/[^a-z0-9_-]+/i', '_', $channel) . '.log', json_encode($entry, JSON_UNESCAPED_SLASHES) . PHP_EOL, FILE_APPEND);
+}
+
+function smtp_enabled(): bool { return get_setting('smtp_enabled', '0') === '1'; }
+function smtp_host(): string { return get_setting('smtp_host', ''); }
+function smtp_port(): int { return (int) get_setting('smtp_port', '587'); }
+function smtp_username(): string { return get_setting('smtp_username', ''); }
+function smtp_password(): string { return get_setting('smtp_password', ''); }
+function smtp_encryption(): string { return get_setting('smtp_encryption', 'tls'); }
+function smtp_from_email(): string { return get_setting('smtp_from_email', ''); }
+function smtp_from_name(): string { return get_setting('smtp_from_name', get_setting('platform_name', APP_NAME)); }
+function smtp_reply_to_email(): string { return get_setting('smtp_reply_to_email', smtp_from_email()); }
+function smtp_reply_to_name(): string { return get_setting('smtp_reply_to_name', smtp_from_name()); }
+function email_notifications_enabled(): bool { return get_setting('email_notifications_enabled', '1') === '1'; }
+
+function normalize_zambian_phone(string $phone): string
+{
+    $digits = preg_replace('/\D+/', '', $phone) ?? '';
+    if (str_starts_with($digits, '260') && strlen($digits) === 12) {
+        return $digits;
+    }
+    if (strlen($digits) == 10 && $digits[0] === '0') {
+        return '26' . $digits;
+    }
+    if (strlen($digits) == 9 && in_array($digits[0], ['7', '9'], true)) {
+        return '260' . $digits;
+    }
+    return $digits;
+}
+
+function valid_zambian_phone(string $phone): bool
+{
+    return (bool) preg_match('/^260(?:7|9)\d{8}$/', $phone);
+}
+
+function provider_label(string $provider): string
+{
+    $provider = strtolower(trim($provider));
+    return ['mtn' => 'MTN', 'airtel' => 'AIRTEL', 'zamtel' => 'ZAMTEL'][$provider] ?? strtoupper($provider);
+}
+
+function payment_gateway_public_message(array $gatewayResponse): string
+{
+    $data = $gatewayResponse['data'] ?? [];
+    $status = strtolower((string) ($data['status'] ?? ''));
+    $reason = trim((string) ($data['reasonForFailure'] ?? $gatewayResponse['message'] ?? ''));
+    if ($status === 'successful') {
+        return 'Payment confirmed successfully.';
+    }
+    if ($status === 'pay-offline') {
+        return 'Approve the mobile money prompt on your phone, then refresh this page.';
+    }
+    if ($status === 'pending') {
+        return 'Payment request created. Wait a moment, then refresh to check the latest gateway status.';
+    }
+    if ($status === 'failed') {
+        return $reason !== '' ? $reason : 'The mobile money request failed before authorization reached the phone.';
+    }
+    return trim((string) ($gatewayResponse['message'] ?? 'Payment request sent.')) ?: 'Payment request sent.';
+}
+
+function require_phpmailer(): void
+{
+    require_once BASE_PATH . '/vendor/phpmailer/src/Exception.php';
+    require_once BASE_PATH . '/vendor/phpmailer/src/SMTP.php';
+    require_once BASE_PATH . '/vendor/phpmailer/src/PHPMailer.php';
+}
+
+function send_platform_email(string $toEmail, string $toName, string $subject, string $htmlBody, ?string $textBody = null): bool
+{
+    if (!smtp_enabled()) {
+        return false;
+    }
+    require_phpmailer();
+    try {
+        $mail = new \PHPMailer\PHPMailer\PHPMailer(true);
+        $mail->isSMTP();
+        $mail->Host = smtp_host();
+        $mail->Port = smtp_port();
+        $mail->SMTPAuth = true;
+        $mail->Username = smtp_username();
+        $mail->Password = smtp_password();
+        $mail->CharSet = 'UTF-8';
+        $encryption = strtolower(trim(smtp_encryption()));
+        if ($encryption === 'ssl') {
+            $mail->SMTPSecure = \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_SMTPS;
+        } elseif ($encryption === 'tls') {
+            $mail->SMTPSecure = \PHPMailer\PHPMailer\PHPMailer::ENCRYPTION_STARTTLS;
+        }
+        $mail->setFrom(smtp_from_email(), smtp_from_name());
+        if (smtp_reply_to_email() !== '') {
+            $mail->addReplyTo(smtp_reply_to_email(), smtp_reply_to_name());
+        }
+        $mail->addAddress($toEmail, $toName);
+        $mail->isHTML(true);
+        $mail->Subject = $subject;
+        $mail->Body = $htmlBody;
+        $mail->AltBody = $textBody ?: trim(strip_tags(str_replace(['<br>', '<br/>', '<br />'], PHP_EOL, $htmlBody)));
+        $mail->send();
+        app_log('mail', 'Email sent', ['to' => $toEmail, 'subject' => $subject]);
+        return true;
+    } catch (Throwable $e) {
+        app_log('mail', 'Email failed', ['to' => $toEmail, 'subject' => $subject, 'error' => $e->getMessage()]);
+        return false;
+    }
+}
+
+function send_user_notification_email(int $userId, string $title, string $message, ?string $targetPath = null): void
+{
+    if (!email_notifications_enabled()) {
+        return;
+    }
+    global $pdo;
+    $stmt = $pdo->prepare('SELECT name, email FROM users WHERE id = :id LIMIT 1');
+    $stmt->execute(['id' => $userId]);
+    $user = $stmt->fetch();
+    if (!$user || !validate_email((string) ($user['email'] ?? ''))) {
+        return;
+    }
+    $link = $targetPath ? app_url($targetPath) : app_url();
+    $platform = get_setting('platform_name', APP_NAME);
+    $html = '<div style="font-family:Inter,Arial,sans-serif;background:#f8fafc;padding:24px">'
+        . '<div style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:18px;padding:28px;border:1px solid #e2e8f0">'
+        . '<h2 style="margin:0 0 12px;color:#0f172a">' . e($title) . '</h2>'
+        . '<p style="margin:0 0 18px;color:#475569;line-height:1.7">' . nl2br(e($message)) . '</p>'
+        . '<p style="margin:0 0 18px"><a href="' . e($link) . '" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:10px;font-weight:700">Open ' . e($platform) . '</a></p>'
+        . '<p style="margin:0;color:#94a3b8;font-size:13px">This email was sent by ' . e($platform) . '.</p>'
+        . '</div></div>';
+    send_platform_email((string) $user['email'], (string) $user['name'], $title . ' · ' . $platform, $html, $message . PHP_EOL . $link);
+}
+
 function money(float|string|int $amount): string { return 'K' . number_format((float) $amount, 2); }
 
 function status_badge(string $status): string
@@ -328,6 +478,7 @@ function lenco_request(string $method, string $path, ?array $payload = null): ar
         CURLOPT_HTTPHEADER => $headers,
         CURLOPT_TIMEOUT => 45,
         CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_SSL_VERIFYHOST => 2,
     ]);
     if ($payload !== null) {
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload, JSON_UNESCAPED_SLASHES));
@@ -335,34 +486,51 @@ function lenco_request(string $method, string $path, ?array $payload = null): ar
     $response = curl_exec($ch);
     $statusCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     if ($response === false) {
-        $error = curl_error($ch); curl_close($ch); throw new RuntimeException('Lenco request failed: ' . $error);
+        $error = curl_error($ch);
+        curl_close($ch);
+        app_log('lenco_gateway', 'Curl error', ['method' => $method, 'path' => $path, 'payload' => $payload, 'error' => $error]);
+        throw new RuntimeException('Lenco request failed: ' . $error);
     }
     curl_close($ch);
     $decoded = json_decode($response, true);
-    if (!is_array($decoded)) throw new RuntimeException('Invalid payment gateway response.');
+    if (!is_array($decoded)) {
+        app_log('lenco_gateway', 'Invalid JSON response', ['method' => $method, 'path' => $path, 'payload' => $payload, 'http_status' => $statusCode, 'response' => $response]);
+        throw new RuntimeException('Invalid payment gateway response.');
+    }
     $decoded['_http_status'] = $statusCode;
+    app_log('lenco_gateway', 'Gateway response', ['method' => $method, 'path' => $path, 'payload' => $payload, 'http_status' => $statusCode, 'response' => $decoded]);
     return $decoded;
 }
 
 function initiate_lenco_collection(array $payment, string $phone, string $provider, string $email, string $name): array
 {
     if (!lenco_enabled()) throw new RuntimeException('Lenco payment settings are not configured yet.');
-    $provider = strtolower($provider);
+    $provider = strtolower(trim($provider));
     if (!in_array($provider, ['mtn','airtel','zamtel'], true)) throw new RuntimeException('Unsupported mobile money provider.');
+    $normalizedPhone = normalize_zambian_phone($phone);
+    if (!valid_zambian_phone($normalizedPhone)) {
+        throw new RuntimeException('Enter a valid Zambia mobile money number in the format 097XXXXXXX, 077XXXXXXX, or 26097XXXXXXX.');
+    }
     $payload = [
         'reference' => $payment['gateway_reference'],
-        'amount' => (float)$payment['amount'],
+        'amount' => number_format((float) $payment['amount'], 2, '.', ''),
         'currency' => 'ZMW',
         'bearer' => 'merchant',
-        'provider' => $provider,
-        'phone' => preg_replace('/\D+/', '', $phone),
+        'phone' => $normalizedPhone,
         'country' => 'ZM',
+        'provider' => $provider,
+        'operator' => provider_label($provider),
         'email' => $email,
         'name' => $name,
-        'callbackUrl' => lenco_callback_url() ?: null,
+        'callbackUrl' => lenco_callback_url() ?: app_url('webhook/lenco.php'),
     ];
-    $payload = array_filter($payload, static fn($v) => $v !== null);
-    return lenco_request('POST', 'collections/mobile-money', $payload);
+    $payload = array_filter($payload, static fn($v) => $v !== null && $v !== '');
+    $response = lenco_request('POST', 'collections/mobile-money', $payload);
+    $status = strtolower((string) ($response['data']['status'] ?? ''));
+    if (($response['status'] ?? false) === false && $status === '') {
+        throw new RuntimeException(trim((string) ($response['message'] ?? 'Unable to start mobile money request.')) ?: 'Unable to start mobile money request.');
+    }
+    return $response;
 }
 
 function requery_lenco_collection(string $reference): array
@@ -374,15 +542,43 @@ function update_payment_gateway_snapshot(int $paymentId, array $gatewayResponse)
 {
     global $pdo;
     $data = $gatewayResponse['data'] ?? [];
-    $gatewayStatus = (string)($data['status'] ?? ($gatewayResponse['status'] ? 'pending' : 'failed'));
-    $pdo->prepare('UPDATE payment_transactions SET gateway_status = :gateway_status, gateway_payload = :gateway_payload, lenco_reference = COALESCE(:lenco_reference, lenco_reference) WHERE id = :id')->execute([
+    $gatewayStatus = strtolower((string) ($data['status'] ?? (($gatewayResponse['status'] ?? false) ? 'pending' : 'failed')));
+    $reason = trim((string) ($data['reasonForFailure'] ?? $gatewayResponse['message'] ?? ''));
+    $pdo->prepare('UPDATE payment_transactions SET gateway_status = :gateway_status, gateway_payload = :gateway_payload, lenco_reference = COALESCE(:lenco_reference, lenco_reference), notes = :notes WHERE id = :id')->execute([
         'gateway_status' => $gatewayStatus,
         'gateway_payload' => json_encode($gatewayResponse, JSON_UNESCAPED_SLASHES),
         'lenco_reference' => $data['lencoReference'] ?? null,
+        'notes' => $reason !== '' ? $reason : ($gatewayStatus === 'pay-offline' ? 'Awaiting approval on customer phone.' : ($gatewayStatus === 'successful' ? 'Payment confirmed by gateway.' : null)),
         'id' => $paymentId,
     ]);
 }
 
+function sync_payment_status(int $paymentId): array
+{
+    global $pdo;
+    $stmt = $pdo->prepare('SELECT * FROM payment_transactions WHERE id = :id LIMIT 1');
+    $stmt->execute(['id'=>$paymentId]);
+    $payment = $stmt->fetch();
+    if (!$payment) throw new RuntimeException('Payment not found.');
+    if (!$payment['gateway_reference']) return $payment;
+    $response = requery_lenco_collection((string)$payment['gateway_reference']);
+    update_payment_gateway_snapshot($paymentId, $response);
+    $status = strtolower((string)($response['data']['status'] ?? 'pending'));
+    if ($status === 'successful') {
+        $pdo->prepare("UPDATE payment_transactions SET status='paid', paid_at = NOW() WHERE id = :id")->execute(['id'=>$paymentId]);
+        if (!empty($payment['plan_id'])) {
+            activate_subscription_from_payment($paymentId);
+        } else {
+            activate_session_from_payment($paymentId);
+        }
+    } elseif ($status === 'failed') {
+        $pdo->prepare("UPDATE payment_transactions SET status='failed' WHERE id = :id")->execute(['id'=>$paymentId]);
+    } else {
+        $pdo->prepare("UPDATE payment_transactions SET status='pending' WHERE id = :id")->execute(['id'=>$paymentId]);
+    }
+    $stmt->execute(['id'=>$paymentId]);
+    return $stmt->fetch() ?: [];
+}
 function activate_subscription_from_payment(int $paymentId): void
 {
     global $pdo;
@@ -435,25 +631,3 @@ function activate_session_from_payment(int $paymentId): void
     } catch (Throwable $e) { if ($pdo->inTransaction()) $pdo->rollBack(); throw $e; }
 }
 
-function sync_payment_status(int $paymentId): array
-{
-    global $pdo;
-    $stmt = $pdo->prepare('SELECT * FROM payment_transactions WHERE id = :id LIMIT 1');
-    $stmt->execute(['id'=>$paymentId]);
-    $payment = $stmt->fetch();
-    if (!$payment) throw new RuntimeException('Payment not found.');
-    if (!$payment['gateway_reference']) return $payment;
-    $response = requery_lenco_collection((string)$payment['gateway_reference']);
-    update_payment_gateway_snapshot($paymentId, $response);
-    $status = (string)($response['data']['status'] ?? 'pending');
-    if ($status === 'successful') {
-        $pdo->prepare("UPDATE payment_transactions SET status='paid', paid_at = NOW() WHERE id = :id")->execute(['id'=>$paymentId]);
-        if (!empty($payment['plan_id'])) activate_subscription_from_payment($paymentId); else activate_session_from_payment($paymentId);
-    } elseif ($status === 'failed') {
-        $pdo->prepare("UPDATE payment_transactions SET status='failed' WHERE id = :id")->execute(['id'=>$paymentId]);
-    } else {
-        $pdo->prepare("UPDATE payment_transactions SET status='pending' WHERE id = :id")->execute(['id'=>$paymentId]);
-    }
-    $stmt->execute(['id'=>$paymentId]);
-    return $stmt->fetch() ?: [];
-}

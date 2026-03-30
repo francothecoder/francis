@@ -11,7 +11,7 @@ $payment = payment_for_request($requestId);
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
     $provider = strtolower(clean_text($_POST['provider'] ?? 'mtn'));
-    $phone = clean_text($_POST['phone_number'] ?? '');
+    $phone = normalize_zambian_phone(clean_text($_POST['phone_number'] ?? ''));
     if ($phone === '') { set_flash('error', 'Enter the mobile money phone number.'); redirect_to('student/pay_offer.php?request_id=' . $requestId); }
     try {
         if (!$payment) {
@@ -63,7 +63,7 @@ include __DIR__ . '/../includes/header.php';
                     <form method="post">
                         <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>"><input type="hidden" name="request_id" value="<?= (int)$requestId ?>">
                         <div class="mobile-money-grid mb-3"><?php foreach (['mtn'=>'MTN','airtel'=>'Airtel','zamtel'=>'Zamtel'] as $key => $label): ?><div class="provider-option"><input id="provider-<?= e($key) ?>" type="radio" name="provider" value="<?= e($key) ?>" <?= $key==='mtn'?'checked':'' ?>><label for="provider-<?= e($key) ?>"><?= e($label) ?></label></div><?php endforeach; ?></div>
-                        <div class="mb-3"><label class="form-label">Phone number</label><input class="form-control" type="text" name="phone_number" placeholder="2609XXXXXXXX" required></div>
+                        <div class="mb-3"><label class="form-label">Phone number</label><input class="form-control" type="text" name="phone_number" placeholder="097XXXXXXX or 26097XXXXXXX" required></div>
                         <div class="d-flex gap-2"><button class="btn btn-primary" <?= lenco_enabled() ? '' : 'disabled' ?>>Request payment</button><a class="btn btn-outline-secondary" href="<?= app_url('student/request_view.php?id=' . $requestId) ?>">Back</a></div>
                     </form>
                 </div>
