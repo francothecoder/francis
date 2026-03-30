@@ -1,25 +1,30 @@
 <?php
-require_once __DIR__ . '/includes/functions.php';
-$pageTitle='Resources';
-$resources = $pdo->query('SELECT * FROM resources ORDER BY id DESC')->fetchAll();
-require_once __DIR__ . '/includes/header.php';
+require_once __DIR__ . '/includes/bootstrap.php';
+$resources = $pdo->query("
+    SELECT r.*, u.name AS author_name
+    FROM resources r
+    LEFT JOIN users u ON u.id = r.created_by
+    ORDER BY r.id DESC
+")->fetchAll();
+$pageTitle = 'Resources';
+include __DIR__ . '/includes/header.php';
 ?>
-<h1 class="fw-bold mb-4">Resources</h1>
-<div class="row g-4">
-    <?php foreach ($resources as $item): ?>
-    <div class="col-md-6">
-        <div class="card card-soft h-100 p-4">
-            <span class="badge text-bg-<?= $item['access_level']==='free' ? 'success':'primary' ?> mb-2 text-uppercase"><?= e($item['access_level']) ?></span>
-            <h5><?= e($item['title']) ?></h5>
-            <p class="small text-muted"><?= e($item['type']) ?></p>
-            <p class="resource-content"><?= e(mb_strimwidth((string)$item['content'], 0, 180, '...')) ?></p>
-            <?php if ($item['access_level'] === 'free'): ?>
-                <a class="btn btn-outline-primary" href="<?= url('auth/login.php') ?>">Login to Read</a>
-            <?php else: ?>
-                <a class="btn btn-primary" href="<?= url('membership.php') ?>">Upgrade to Read</a>
-            <?php endif; ?>
+<h1 class="h3 mb-4">Academic resources</h1>
+<div class="row g-3">
+    <?php foreach ($resources as $resource): ?>
+        <div class="col-lg-6">
+            <div class="card card-soft p-4 h-100">
+                <div class="d-flex justify-content-between gap-3 align-items-start">
+                    <div>
+                        <span class="tag-pill d-inline-block mb-3"><?= e($resource['resource_type']) ?></span>
+                        <h2 class="h5"><?= e($resource['title']) ?></h2>
+                    </div>
+                    <?= status_badge($resource['access_level']) ?>
+                </div>
+                <div class="resource-content text-muted mb-3"><?= e(substr((string) $resource['content'], 0, 500)) ?><?= strlen((string) $resource['content']) > 500 ? '...' : '' ?></div>
+                <div class="small text-muted">By <?= e($resource['author_name'] ?: 'Admin') ?></div>
+            </div>
         </div>
-    </div>
     <?php endforeach; ?>
 </div>
-<?php require_once __DIR__ . '/includes/footer.php'; ?>
+<?php include __DIR__ . '/includes/footer.php'; ?>

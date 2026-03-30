@@ -1,266 +1,273 @@
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
-DROP TABLE IF EXISTS contact_messages;
-DROP TABLE IF EXISTS community_topic_props;
-DROP TABLE IF EXISTS community_topic_views;
-DROP TABLE IF EXISTS community_comments;
-DROP TABLE IF EXISTS community_topics;
-DROP TABLE IF EXISTS support_replies;
-DROP TABLE IF EXISTS support_requests;
-DROP TABLE IF EXISTS downloads;
+DROP TABLE IF EXISTS notifications;
+DROP TABLE IF EXISTS tutor_ratings;
+DROP TABLE IF EXISTS session_messages;
+DROP TABLE IF EXISTS payout_requests;
+DROP TABLE IF EXISTS tutor_wallet_transactions;
+DROP TABLE IF EXISTS payment_transactions;
+DROP TABLE IF EXISTS study_sessions;
+DROP TABLE IF EXISTS help_offers;
+DROP TABLE IF EXISTS help_requests;
 DROP TABLE IF EXISTS resources;
-DROP TABLE IF EXISTS projects;
-DROP TABLE IF EXISTS payment_records;
-DROP TABLE IF EXISTS subscription_requests;
-DROP TABLE IF EXISTS user_memberships;
-DROP TABLE IF EXISTS membership_plans;
+DROP TABLE IF EXISTS user_subscriptions;
+DROP TABLE IF EXISTS subscription_plans;
+DROP TABLE IF EXISTS xp_transactions;
+DROP TABLE IF EXISTS user_rewards;
+DROP TABLE IF EXISTS tutor_profiles;
 DROP TABLE IF EXISTS settings;
 DROP TABLE IF EXISTS users;
 
 SET FOREIGN_KEY_CHECKS = 1;
 
-CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE users (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(150) NOT NULL,
     email VARCHAR(190) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
-    role ENUM('admin','student') NOT NULL DEFAULT 'student',
+    role ENUM('admin','student','tutor') NOT NULL DEFAULT 'student',
     university VARCHAR(190) NULL,
     bio TEXT NULL,
+    avatar_path VARCHAR(255) NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS membership_plans (
+CREATE TABLE settings (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    setting_key VARCHAR(100) NOT NULL UNIQUE,
+    setting_value TEXT NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE tutor_profiles (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNSIGNED NOT NULL UNIQUE,
+    headline VARCHAR(190) NOT NULL,
+    bio TEXT NOT NULL,
+    subjects VARCHAR(255) NOT NULL,
+    starting_price DECIMAL(10,2) NOT NULL DEFAULT 25.00,
+    min_offer_price DECIMAL(10,2) NOT NULL DEFAULT 15.00,
+    rating_average DECIMAL(3,2) NOT NULL DEFAULT 0,
+    total_reviews INT UNSIGNED NOT NULL DEFAULT 0,
+    total_sessions INT UNSIGNED NOT NULL DEFAULT 0,
+    is_verified TINYINT(1) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_tutor_profiles_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE user_rewards (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNSIGNED NOT NULL UNIQUE,
+    current_xp INT UNSIGNED NOT NULL DEFAULT 0,
+    current_level INT UNSIGNED NOT NULL DEFAULT 1,
+    reward_credits INT UNSIGNED NOT NULL DEFAULT 0,
+    streak_days INT UNSIGNED NOT NULL DEFAULT 0,
+    last_activity_date DATE NULL,
+    CONSTRAINT fk_user_rewards_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE xp_transactions (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNSIGNED NOT NULL,
+    reason_key VARCHAR(100) NOT NULL,
+    points INT NOT NULL,
+    reference_id INT UNSIGNED NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_xp_transactions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE subscription_plans (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
-    price DECIMAL(10,2) NOT NULL,
-    duration_days INT NOT NULL DEFAULT 30,
-    description TEXT NULL,
-    features TEXT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    monthly_price DECIMAL(10,2) NOT NULL,
+    help_discount_percent DECIMAL(5,2) NOT NULL DEFAULT 0,
+    monthly_help_credits INT UNSIGNED NOT NULL DEFAULT 0,
+    feature_summary VARCHAR(255) NOT NULL,
+    description TEXT NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS user_memberships (
+CREATE TABLE user_subscriptions (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     user_id INT UNSIGNED NOT NULL,
     plan_id INT UNSIGNED NOT NULL,
     starts_at DATETIME NOT NULL,
-    expires_at DATETIME NOT NULL,
+    ends_at DATETIME NOT NULL,
     status ENUM('active','expired','cancelled') NOT NULL DEFAULT 'active',
-    approved_by INT UNSIGNED NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_user_memberships_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_user_memberships_plan FOREIGN KEY (plan_id) REFERENCES membership_plans(id) ON DELETE CASCADE,
-    CONSTRAINT fk_user_memberships_admin FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE SET NULL
+    CONSTRAINT fk_user_subscriptions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_user_subscriptions_plan FOREIGN KEY (plan_id) REFERENCES subscription_plans(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS subscription_requests (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    user_id INT UNSIGNED NOT NULL,
-    plan_id INT UNSIGNED NOT NULL,
-    amount DECIMAL(10,2) NOT NULL,
-    payment_method VARCHAR(100) NOT NULL,
-    reference_code VARCHAR(120) NULL,
-    notes TEXT NULL,
-    status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
-    reviewed_by INT UNSIGNED NULL,
-    reviewed_at DATETIME NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_subscription_requests_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_subscription_requests_plan FOREIGN KEY (plan_id) REFERENCES membership_plans(id) ON DELETE CASCADE,
-    CONSTRAINT fk_subscription_requests_admin FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS payment_records (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    user_id INT UNSIGNED NOT NULL,
-    plan_id INT UNSIGNED NULL,
-    request_id INT UNSIGNED NULL,
-    amount DECIMAL(10,2) NOT NULL,
-    method VARCHAR(100) NOT NULL,
-    reference_code VARCHAR(120) NULL,
-    notes TEXT NULL,
-    recorded_by INT UNSIGNED NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_payments_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_payments_plan FOREIGN KEY (plan_id) REFERENCES membership_plans(id) ON DELETE SET NULL,
-    CONSTRAINT fk_payments_request FOREIGN KEY (request_id) REFERENCES subscription_requests(id) ON DELETE SET NULL,
-    CONSTRAINT fk_payments_recorder FOREIGN KEY (recorded_by) REFERENCES users(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS projects (
+CREATE TABLE resources (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     title VARCHAR(190) NOT NULL,
-    category VARCHAR(100) NOT NULL,
-    description TEXT NOT NULL,
-    access_level ENUM('free','basic','pro','elite') NOT NULL DEFAULT 'free',
-    file_path VARCHAR(255) NULL,
+    resource_type VARCHAR(100) NOT NULL,
+    content LONGTEXT NOT NULL,
+    access_level ENUM('free','starter','plus','pro') NOT NULL DEFAULT 'free',
     created_by INT UNSIGNED NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NULL DEFAULT NULL,
-    CONSTRAINT fk_projects_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS resources (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    title VARCHAR(190) NOT NULL,
-    type VARCHAR(100) NOT NULL,
-    content LONGTEXT NULL,
-    file_path VARCHAR(255) NULL,
-    access_level ENUM('free','basic','pro','elite') NOT NULL DEFAULT 'free',
-    created_by INT UNSIGNED NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NULL DEFAULT NULL,
     CONSTRAINT fk_resources_user FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS downloads (
+CREATE TABLE help_requests (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    user_id INT UNSIGNED NOT NULL,
-    item_type ENUM('project','resource') NOT NULL,
-    item_id INT UNSIGNED NOT NULL,
+    student_id INT UNSIGNED NOT NULL,
+    selected_tutor_id INT UNSIGNED NULL,
+    accepted_offer_id INT UNSIGNED NULL,
+    subject VARCHAR(100) NOT NULL,
+    title VARCHAR(190) NOT NULL,
+    details TEXT NOT NULL,
+    urgency ENUM('normal','urgent') NOT NULL DEFAULT 'normal',
+    suggested_budget DECIMAL(10,2) NOT NULL DEFAULT 0,
+    reward_credits_to_use INT UNSIGNED NOT NULL DEFAULT 0,
+    attachment_path VARCHAR(255) NULL,
+    status ENUM('open','quoted','accepted','in_progress','completed','cancelled') NOT NULL DEFAULT 'open',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_downloads_item (item_type, item_id),
-    CONSTRAINT fk_downloads_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    CONSTRAINT fk_help_requests_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_help_requests_tutor FOREIGN KEY (selected_tutor_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS support_requests (
+CREATE TABLE help_offers (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    user_id INT UNSIGNED NOT NULL,
-    subject VARCHAR(190) NOT NULL,
+    request_id INT UNSIGNED NOT NULL,
+    tutor_id INT UNSIGNED NOT NULL,
+    offered_amount DECIMAL(10,2) NOT NULL,
     message TEXT NOT NULL,
-    status ENUM('open','in_progress','closed') NOT NULL DEFAULT 'open',
+    status ENUM('submitted','accepted','rejected','withdrawn') NOT NULL DEFAULT 'submitted',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NULL DEFAULT NULL,
-    CONSTRAINT fk_support_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    CONSTRAINT fk_help_offers_request FOREIGN KEY (request_id) REFERENCES help_requests(id) ON DELETE CASCADE,
+    CONSTRAINT fk_help_offers_tutor FOREIGN KEY (tutor_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS support_replies (
+CREATE TABLE study_sessions (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    support_request_id INT UNSIGNED NOT NULL,
-    user_id INT UNSIGNED NOT NULL,
+    request_id INT UNSIGNED NOT NULL UNIQUE,
+    student_id INT UNSIGNED NOT NULL,
+    tutor_id INT UNSIGNED NOT NULL,
+    agreed_amount DECIMAL(10,2) NOT NULL,
+    final_amount DECIMAL(10,2) NOT NULL,
+    platform_fee DECIMAL(10,2) NOT NULL DEFAULT 0,
+    tutor_earnings DECIMAL(10,2) NOT NULL DEFAULT 0,
+    status ENUM('in_progress','completed','cancelled') NOT NULL DEFAULT 'in_progress',
+    started_at DATETIME NOT NULL,
+    ended_at DATETIME NULL,
+    CONSTRAINT fk_study_sessions_request FOREIGN KEY (request_id) REFERENCES help_requests(id) ON DELETE CASCADE,
+    CONSTRAINT fk_study_sessions_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_study_sessions_tutor FOREIGN KEY (tutor_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE session_messages (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    session_id INT UNSIGNED NOT NULL,
+    sender_id INT UNSIGNED NOT NULL,
     message TEXT NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_support_replies_ticket FOREIGN KEY (support_request_id) REFERENCES support_requests(id) ON DELETE CASCADE,
-    CONSTRAINT fk_support_replies_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    CONSTRAINT fk_session_messages_session FOREIGN KEY (session_id) REFERENCES study_sessions(id) ON DELETE CASCADE,
+    CONSTRAINT fk_session_messages_sender FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS community_topics (
+CREATE TABLE payment_transactions (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    request_id INT UNSIGNED NULL,
+    session_id INT UNSIGNED NULL,
+    student_id INT UNSIGNED NOT NULL,
+    tutor_id INT UNSIGNED NULL,
+    amount DECIMAL(10,2) NOT NULL,
+    discount_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+    reward_credit_value DECIMAL(10,2) NOT NULL DEFAULT 0,
+    platform_fee DECIMAL(10,2) NOT NULL DEFAULT 0,
+    tutor_earnings DECIMAL(10,2) NOT NULL DEFAULT 0,
+    status ENUM('held','released','paid','refunded') NOT NULL DEFAULT 'paid',
+    notes VARCHAR(255) NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_payment_transactions_request FOREIGN KEY (request_id) REFERENCES help_requests(id) ON DELETE SET NULL,
+    CONSTRAINT fk_payment_transactions_session FOREIGN KEY (session_id) REFERENCES study_sessions(id) ON DELETE SET NULL,
+    CONSTRAINT fk_payment_transactions_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_payment_transactions_tutor FOREIGN KEY (tutor_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE tutor_wallet_transactions (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tutor_id INT UNSIGNED NOT NULL,
+    session_id INT UNSIGNED NULL,
+    amount DECIMAL(10,2) NOT NULL,
+    transaction_type ENUM('credit','debit') NOT NULL,
+    notes VARCHAR(255) NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_tutor_wallet_transactions_tutor FOREIGN KEY (tutor_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_tutor_wallet_transactions_session FOREIGN KEY (session_id) REFERENCES study_sessions(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE payout_requests (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tutor_id INT UNSIGNED NOT NULL,
+    amount DECIMAL(10,2) NOT NULL,
+    status ENUM('requested','paid','rejected') NOT NULL DEFAULT 'requested',
+    requested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    paid_at DATETIME NULL,
+    CONSTRAINT fk_payout_requests_tutor FOREIGN KEY (tutor_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE tutor_ratings (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    session_id INT UNSIGNED NOT NULL UNIQUE,
+    tutor_id INT UNSIGNED NOT NULL,
+    student_id INT UNSIGNED NOT NULL,
+    rating TINYINT UNSIGNED NOT NULL,
+    review TEXT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_tutor_ratings_session FOREIGN KEY (session_id) REFERENCES study_sessions(id) ON DELETE CASCADE,
+    CONSTRAINT fk_tutor_ratings_tutor FOREIGN KEY (tutor_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_tutor_ratings_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE notifications (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     user_id INT UNSIGNED NOT NULL,
     title VARCHAR(190) NOT NULL,
-    category VARCHAR(100) NOT NULL,
-    content LONGTEXT NOT NULL,
-    attachment_path VARCHAR(255) NULL,
-    attachment_name VARCHAR(190) NULL,
-    is_locked TINYINT(1) NOT NULL DEFAULT 0,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NULL DEFAULT NULL,
-    CONSTRAINT fk_community_topics_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS community_comments (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    topic_id INT UNSIGNED NOT NULL,
-    user_id INT UNSIGNED NOT NULL,
-    parent_id INT UNSIGNED NULL,
-    comment TEXT NOT NULL,
-    attachment_path VARCHAR(255) NULL,
-    attachment_name VARCHAR(190) NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_community_comments_topic FOREIGN KEY (topic_id) REFERENCES community_topics(id) ON DELETE CASCADE,
-    CONSTRAINT fk_community_comments_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_community_comments_parent FOREIGN KEY (parent_id) REFERENCES community_comments(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS community_topic_views (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    topic_id INT UNSIGNED NOT NULL,
-    user_id INT UNSIGNED NULL,
-    session_key VARCHAR(120) NOT NULL,
-    viewed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uniq_topic_session (topic_id, session_key),
-    INDEX idx_topic_views_topic (topic_id),
-    CONSTRAINT fk_topic_views_topic FOREIGN KEY (topic_id) REFERENCES community_topics(id) ON DELETE CASCADE,
-    CONSTRAINT fk_topic_views_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS community_topic_props (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    topic_id INT UNSIGNED NOT NULL,
-    user_id INT UNSIGNED NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uniq_topic_user_prop (topic_id, user_id),
-    INDEX idx_topic_props_topic (topic_id),
-    CONSTRAINT fk_topic_props_topic FOREIGN KEY (topic_id) REFERENCES community_topics(id) ON DELETE CASCADE,
-    CONSTRAINT fk_topic_props_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS contact_messages (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(150) NOT NULL,
-    email VARCHAR(190) NOT NULL,
-    subject VARCHAR(190) NOT NULL,
     message TEXT NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    target_path VARCHAR(255) NULL,
+    is_read TINYINT(1) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_notifications_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS settings (
-    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    key_name VARCHAR(100) NOT NULL UNIQUE,
-    value TEXT NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+INSERT INTO settings (setting_key, setting_value) VALUES
+('platform_commission_percent', '20'),
+('platform_name', 'Academic Support Hub');
 
 INSERT INTO users (name, email, password, role, university, bio) VALUES
-('Francis Kwesa Admin', 'admin@franciskwesa.com', '$2y$12$xutMBIZDDjkpU1Wg93mwOebAmLS1GzztFBoJqe6v4rFGg4pK/MacW', 'admin', 'Admin', 'System administrator account'),
-('Sample Student', 'student@example.com', '$2y$12$WoHzoAvml0EcnQ1JnqFr8OAVqHVrxSadZp8B.JDF.yvMRc4l5Xx2u', 'student', 'University of Zambia', 'Sample seeded student account');
+('Admin User', 'admin@academicsupporthub.com', '$2y$12$gz2cseFerWijZXl1IhiiQO3dgPyPuHhg2r9xBb/tVgIY/8LAAeZP6', 'admin', 'Platform Admin', 'Main administrator'),
+('Sample Student', 'student@example.com', '$2y$12$b33aZ./ZbuhZzfkayvslEe8ei//wquKBucaO0Xnkxzh18YLHS6K0q', 'student', 'University of Zambia', 'Active student account'),
+('Tutor Grace', 'tutor@example.com', '$2y$12$2hUM5zHrgOh2.aI7TO.pveStq5tCJtakwjL04nV/lMHtjJVz3kg8C', 'tutor', 'Copperbelt University', 'Experienced tutor in ICT, databases, and systems analysis');
 
-INSERT INTO membership_plans (name, price, duration_days, description, features) VALUES
-('Basic', 50.00, 30, 'For students getting started.', 'Selected projects, basic resources, community access'),
-('Pro', 100.00, 30, 'Best for active university students.', 'Full project library, premium resources, faster support, community access'),
-('Elite', 200.00, 30, 'For students who need closer support.', 'Everything in Pro, one-on-one guidance, premium support');
+INSERT INTO tutor_profiles (user_id, headline, bio, subjects, starting_price, min_offer_price, rating_average, total_reviews, total_sessions, is_verified) VALUES
+(3, 'ICT, Databases and Systems Analysis Tutor', 'Helps students understand project design, system analysis, ERD work, and practical ICT tasks.', 'ICT, Databases, Systems Analysis, Documentation', 35.00, 25.00, 4.80, 12, 18, 1);
 
-INSERT INTO user_memberships (user_id, plan_id, starts_at, expires_at, status, approved_by) VALUES
-(2, 2, NOW(), DATE_ADD(NOW(), INTERVAL 30 DAY), 'active', 1);
+INSERT INTO user_rewards (user_id, current_xp, current_level, reward_credits, streak_days, last_activity_date) VALUES
+(1, 0, 1, 0, 1, CURDATE()),
+(2, 45, 2, 3, 4, CURDATE()),
+(3, 65, 2, 2, 3, CURDATE());
 
-INSERT INTO projects (title, category, description, access_level, created_by) VALUES
-('Student Management System', 'PHP', 'Complete school management style project with login and reports.', 'pro', 1),
-('Courier Tracking System', 'PHP', 'Track parcels, delivery updates, and agent activity.', 'pro', 1),
-('Library Management System', 'Web', 'Manage books, students, and lending workflows.', 'basic', 1),
-('Simple Portfolio Website', 'Frontend', 'A beginner-friendly portfolio template for students.', 'free', 1);
+INSERT INTO subscription_plans (name, monthly_price, help_discount_percent, monthly_help_credits, feature_summary, description) VALUES
+('Starter Plan', 49.00, 5.00, 1, 'Great for getting started with guided support.', 'Access starter resources, 1 monthly help credit, and discounted academic help sessions.'),
+('Study Plus', 99.00, 10.00, 3, 'Ideal for active students who need more support.', 'More credits, deeper resource access, and stronger help discounts.'),
+('Academic Pro', 149.00, 15.00, 5, 'Premium plan for students who want priority support.', 'Best value for frequent guided sessions, premium resources, and stronger learning rewards.');
 
-INSERT INTO resources (title, type, content, access_level, created_by) VALUES
-('How to Choose a Final Year Project', 'Guide', 'Start with a real problem, define features early, and keep your scope achievable.', 'free', 1),
-('PHP Project Documentation Outline', 'Template', 'Chapter 1: Introduction\nChapter 2: Literature Review\nChapter 3: Methodology\nChapter 4: Implementation\nChapter 5: Testing and Conclusion', 'basic', 1),
-('How to Prepare for Project Demo Day', 'Guide', 'Know your use case, practice the walkthrough, and prepare for common questions.', 'pro', 1);
+INSERT INTO user_subscriptions (user_id, plan_id, starts_at, ends_at, status) VALUES
+(2, 2, NOW(), DATE_ADD(NOW(), INTERVAL 30 DAY), 'active');
 
-INSERT INTO support_requests (user_id, subject, message, status) VALUES
-(2, 'Need help choosing a final year project', 'I need ideas around a PHP web system that is realistic for university submission.', 'open');
+INSERT INTO resources (title, resource_type, content, access_level, created_by) VALUES
+('How to structure a strong final-year system proposal', 'Guide', 'Start with the problem statement, define measurable objectives, map users clearly, and keep your scope realistic for your course calendar.', 'free', 1),
+('Documentation outline for PHP academic systems', 'Template', 'Chapter 1: Introduction\nChapter 2: Literature Review\nChapter 3: Methodology\nChapter 4: System Design\nChapter 5: Testing, Findings and Conclusion', 'starter', 1),
+('Database normalization revision note', 'Revision Note', 'A quick breakdown of 1NF, 2NF, and 3NF with simple examples for academic systems.', 'plus', 1);
 
-INSERT INTO support_replies (support_request_id, user_id, message) VALUES
-(1, 1, 'Start by choosing a problem you understand well. A student management or small inventory platform is usually realistic and strong.');
+INSERT INTO help_requests (student_id, selected_tutor_id, subject, title, details, urgency, suggested_budget, reward_credits_to_use, status) VALUES
+(2, NULL, 'ICT', 'Need help breaking down a school management ERD', 'I need help understanding users, entities, and relationships for a simple school system ERD before submission.', 'normal', 30.00, 1, 'quoted');
 
-INSERT INTO community_topics (user_id, title, category, content) VALUES
-(2, 'Best final year project ideas for PHP students?', 'Projects', 'I want a project idea that is practical, not too huge, and can impress my lecturers.'),
-(1, 'Welcome to the Francis Kwesa student community', 'Announcements', 'Use this space to ask questions, share tips, and support each other.');
+INSERT INTO help_offers (request_id, tutor_id, offered_amount, message, status) VALUES
+(1, 3, 35.00, 'I can guide you through the entities, attributes, and relationships step by step and help you prepare a cleaner ERD.', 'submitted');
 
-INSERT INTO community_comments (topic_id, user_id, parent_id, comment) VALUES
-(1, 1, NULL, 'Start with something that solves a real issue around campus, school administration, or local business workflows.'),
-(1, 2, 1, 'That helps. I am considering a hostel management system.'),
-(2, 2, NULL, 'Glad to be here.');
-
-INSERT INTO community_topic_views (topic_id, user_id, session_key) VALUES
-(1, 2, 'seed-student-1'),
-(1, 1, 'seed-admin-1'),
-(2, 2, 'seed-student-2');
-
-INSERT INTO community_topic_props (topic_id, user_id) VALUES
-(1, 1),
-(1, 2),
-(2, 2);
-
-INSERT INTO settings (key_name, value) VALUES
-('site_phone', '+260963884318'),
-('site_email', 'hello@franciskwesa.com'),
-('site_whatsapp', '260963884318');
+INSERT INTO notifications (user_id, title, message, target_path) VALUES
+(2, 'Welcome back', 'Your Study Plus plan is active and your reward credits are ready to use.', 'student/dashboard.php'),
+(3, 'Tutor profile verified', 'Your profile is visible to students and you can now receive study requests.', 'tutor/dashboard.php');

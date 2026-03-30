@@ -1,89 +1,70 @@
 <?php
-require_once __DIR__ . '/../includes/functions.php';
-require_admin();
+require_once __DIR__ . '/../includes/bootstrap.php';
+require_role(['admin']);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = $_POST['action'] ?? 'create';
-    try {
-        if ($action === 'delete') {
-            $id = (int)($_POST['id'] ?? 0);
-            $stmt = $pdo->prepare('SELECT * FROM resources WHERE id = :id LIMIT 1');
-            $stmt->execute(['id' => $id]);
-            if ($row = $stmt->fetch()) {
-                delete_uploaded_file($row['file_path']);
-                $pdo->prepare('DELETE FROM resources WHERE id = :id')->execute(['id' => $id]);
-                set_flash('success', 'Resource deleted.');
-            }
-        } else {
-            $path = upload_file($_FILES['file'] ?? [], 'resources', ['pdf','doc','docx','zip','rar']);
-            if ($action === 'update') {
-                $id = (int)($_POST['id'] ?? 0);
-                $stmt = $pdo->prepare('SELECT * FROM resources WHERE id = :id LIMIT 1');
-                $stmt->execute(['id' => $id]);
-                $existing = $stmt->fetch();
-                if ($existing) {
-                    $finalPath = $path ?: $existing['file_path'];
-                    if ($path && $existing['file_path']) delete_uploaded_file($existing['file_path']);
-                    $update = $pdo->prepare('UPDATE resources SET title=:title, type=:type, content=:content, file_path=:file_path, access_level=:access_level, updated_at=NOW() WHERE id=:id');
-                    $update->execute([
-                        'title' => trim($_POST['title'] ?? ''),
-                        'type' => trim($_POST['type'] ?? ''),
-                        'content' => trim($_POST['content'] ?? ''),
-                        'file_path' => $finalPath,
-                        'access_level' => trim($_POST['access_level'] ?? 'free'),
-                        'id' => $id,
-                    ]);
-                    set_flash('success', 'Resource updated successfully.');
-                }
-            } else {
-                $stmt = $pdo->prepare('INSERT INTO resources (title, type, content, file_path, access_level, created_by) VALUES (:title, :type, :content, :file_path, :access_level, :created_by)');
-                $stmt->execute([
-                    'title' => trim($_POST['title'] ?? ''),
-                    'type' => trim($_POST['type'] ?? ''),
-                    'content' => trim($_POST['content'] ?? ''),
-                    'file_path' => $path,
-                    'access_level' => trim($_POST['access_level'] ?? 'free'),
-                    'created_by' => current_user()['id'],
-                ]);
-                set_flash('success', 'Resource added successfully.');
-            }
-        }
-    } catch (Throwable $e) {
-        set_flash('error', $e->getMessage());
+    verify_csrf();
+    $title = clean_text($_POST['title'] ?? '');
+    $type = clean_text($_POST['resource_type'] ?? '');
+    $content = multi_line_text($_POST['content'] ?? '');
+    $access = $_POST['access_level'] ?? 'free';
+
+    if ($title === '' || $type === '' || $content === '' || !in_array($access, ['free','starter','plus','pro'], true)) {
+        set_flash('error', 'Complete the resource form properly.');
+        redirect_to('admin/resources.php');
     }
+
+    $stmt = $pdo->prepare('INSERT INTO resources (title, resource_type, content, access_level, created_by) VALUES (:title, :resource_type, :content, :access_level, :created_by)');
+    $stmt->execute([
+        'title' => $title,
+        'resource_type' => $type,
+        'content' => $content,
+        'access_level' => $access,
+        'created_by' => current_user()['id'],
+    ]);
+    set_flash('success', 'Resource published.');
     redirect_to('admin/resources.php');
 }
 
-$editId = (int)($_GET['edit'] ?? 0);
-$editItem = null;
-if ($editId) {
-    $stmt = $pdo->prepare('SELECT * FROM resources WHERE id = :id');
-    $stmt->execute(['id' => $editId]);
-    $editItem = $stmt->fetch();
-}
-$items = $pdo->query('SELECT * FROM resources ORDER BY id DESC')->fetchAll();
-$pageTitle='Manage Resources'; require_once __DIR__ . '/../includes/header.php'; ?>
-<div class="row g-4">
+$resources = $pdo->query('SELECT * FROM resources ORDER BY id DESC')->fetchAll();
+$pageTitle = 'Manage resources';
+include __DIR__ . '/../includes/header.php';
+?>
+<div class="row g-3">
     <div class="col-lg-5">
         <div class="card card-soft p-4">
-            <h1 class="fw-bold mb-3"><?= $editItem ? 'Edit Resource' : 'Add Resource' ?></h1>
-            <form method="post" enctype="multipart/form-data">
-                <input type="hidden" name="action" value="<?= $editItem ? 'update' : 'create' ?>">
-                <?php if ($editItem): ?><input type="hidden" name="id" value="<?= (int)$editItem['id'] ?>"><?php endif; ?>
-                <div class="mb-3"><label class="form-label">Title</label><input class="form-control" name="title" required value="<?= e($editItem['title'] ?? '') ?>"></div>
-                <div class="mb-3"><label class="form-label">Type</label><input class="form-control" name="type" placeholder="Guide / Template / Tutorial" required value="<?= e($editItem['type'] ?? '') ?>"></div>
-                <div class="mb-3"><label class="form-label">Content</label><textarea class="form-control" rows="5" name="content"><?= e($editItem['content'] ?? '') ?></textarea></div>
-                <div class="mb-3"><label class="form-label">Access Level</label><select class="form-select" name="access_level"><?php foreach(['free','basic','pro','elite'] as $level): ?><option value="<?= $level ?>" <?= (($editItem['access_level'] ?? '') === $level) ? 'selected' : '' ?>><?= ucfirst($level) ?></option><?php endforeach; ?></select></div>
-                <div class="mb-3"><label class="form-label">Attachment</label><input type="file" class="form-control" name="file"></div>
-                <button class="btn btn-primary w-100"><?= $editItem ? 'Update Resource' : 'Save Resource' ?></button>
+            <h1 class="h4 mb-3">Publish resource</h1>
+            <form method="post">
+                <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+                <div class="mb-3"><label class="form-label">Title</label><input class="form-control" type="text" name="title" required></div>
+                <div class="mb-3"><label class="form-label">Type</label><input class="form-control" type="text" name="resource_type" placeholder="Guide, Template, Revision Note" required></div>
+                <div class="mb-3"><label class="form-label">Access level</label><select class="form-select" name="access_level"><option value="free">Free</option><option value="starter">Starter</option><option value="plus">Study Plus</option><option value="pro">Academic Pro</option></select></div>
+                <div class="mb-3"><label class="form-label">Content</label><textarea class="form-control" name="content" rows="7" required></textarea></div>
+                <button class="btn btn-primary">Publish resource</button>
             </form>
         </div>
     </div>
     <div class="col-lg-7">
         <div class="card card-soft p-4">
-            <h4>Existing Resources</h4>
-            <div class="table-responsive"><table class="table"><thead><tr><th>Title</th><th>Type</th><th>Access</th><th></th></tr></thead><tbody><?php foreach($items as $item): ?><tr><td><?= e($item['title']) ?></td><td><?= e($item['type']) ?></td><td><?= e($item['access_level']) ?></td><td class="text-end"><a class="btn btn-sm btn-outline-primary" href="<?= url('admin/resources.php?edit=' . (int)$item['id']) ?>">Edit</a> <form method="post" class="d-inline"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int)$item['id'] ?>"><button class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this resource?')">Delete</button></form></td></tr><?php endforeach; ?></tbody></table></div>
+            <div class="section-title mb-3">Published resources</div>
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead><tr><th>Title</th><th>Type</th><th>Access</th></tr></thead>
+                    <tbody>
+                        <?php foreach ($resources as $resource): ?>
+                            <tr>
+                                <td><?= e($resource['title']) ?></td>
+                                <td><?= e($resource['resource_type']) ?></td>
+                                <td><?= status_badge($resource['access_level']) ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        <?php if (!$resources): ?>
+                            <tr><td colspan="3" class="text-muted">No resources yet.</td></tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 </div>
-<?php require_once __DIR__ . '/../includes/footer.php'; ?>
+<?php include __DIR__ . '/../includes/footer.php'; ?>

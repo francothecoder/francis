@@ -1,108 +1,99 @@
 <?php
-require_once __DIR__ . '/includes/functions.php';
-$pageTitle = 'Home';
-$stats = [
-    'projects' => (int)$pdo->query('SELECT COUNT(*) FROM projects')->fetchColumn(),
-    'resources' => (int)$pdo->query('SELECT COUNT(*) FROM resources')->fetchColumn(),
-    'students' => (int)$pdo->query("SELECT COUNT(*) FROM users WHERE role = 'student'")->fetchColumn(),
-];
-$featuredTopics = $pdo->query("SELECT ct.*, u.name FROM community_topics ct INNER JOIN users u ON u.id = ct.user_id ORDER BY ct.id DESC LIMIT 3")->fetchAll();
-require_once __DIR__ . '/includes/header.php';
+require_once __DIR__ . '/includes/bootstrap.php';
+
+$tutors = $pdo->query("
+    SELECT tp.*, u.name, u.avatar_path
+    FROM tutor_profiles tp
+    INNER JOIN users u ON u.id = tp.user_id
+    WHERE tp.is_verified = 1
+    ORDER BY tp.rating_average DESC, tp.total_sessions DESC
+    LIMIT 4
+")->fetchAll();
+
+$resources = $pdo->query("SELECT * FROM resources ORDER BY id DESC LIMIT 3")->fetchAll();
+$pageTitle = APP_NAME . ' - Academic support that feels real';
+include __DIR__ . '/includes/header.php';
 ?>
-<section class="hero mb-5">
-    <div class="row align-items-center g-4">
-        <div class="col-lg-7">
-            <div class="badge bg-light text-primary mb-3">Student-focused academic support platform</div>
-            <h1 class="display-5 fw-bold">Helping university students succeed in their academic journey</h1>
-            <p class="lead mt-3">Access projects, coding help, practical IT guidance, resources, subscriptions, and a student community designed to make learning easier, faster, and more effective.</p>
-            <div class="d-flex gap-2 flex-wrap mt-4">
-                <a href="<?= url('auth/register.php') ?>" class="btn btn-light btn-lg">Join Student Hub</a>
-                <a href="<?= url('membership.php') ?>" class="btn btn-outline-light btn-lg">View Membership</a>
-                <a href="<?= url('community/index.php') ?>" class="btn btn-outline-light btn-lg">Explore Community</a>
-            </div>
-        </div>
-        <div class="col-lg-5">
-            <div class="card card-soft p-4 text-dark">
-                <h4 class="fw-bold">Main Services</h4>
-                <ul class="list-clean mb-3">
-                    <li>Assignment and project support</li>
-                    <li>Ready-made projects and systems</li>
-                    <li>Practical IT training and guidance</li>
-                </ul>
-                <div class="row g-3 text-center">
-                    <div class="col-4"><div class="bg-light rounded-4 p-3"><div class="fw-bold fs-4"><?= e($stats['projects']) ?>+</div><small>Projects</small></div></div>
-                    <div class="col-4"><div class="bg-light rounded-4 p-3"><div class="fw-bold fs-4"><?= e($stats['resources']) ?>+</div><small>Resources</small></div></div>
-                    <div class="col-4"><div class="bg-light rounded-4 p-3"><div class="fw-bold fs-4"><?= e($stats['students']) ?>+</div><small>Students</small></div></div>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<section class="mb-5">
-    <h2 class="section-title mb-4">Why choose us</h2>
-    <div class="row g-4">
-        <div class="col-md-4"><div class="card card-soft h-100 p-4"><div class="icon-box mb-3">1</div><h5>Built for Students</h5><p>Everything on the platform is designed around real university challenges, deadlines, project pressure, and practical success.</p></div></div>
-        <div class="col-md-4"><div class="card card-soft h-100 p-4"><div class="icon-box mb-3">2</div><h5>Fast, Reliable Support</h5><p>Get practical help, clear direction, and resources you can actually use without wasting time.</p></div></div>
-        <div class="col-md-4"><div class="card card-soft h-100 p-4"><div class="icon-box mb-3">3</div><h5>Community + Resources</h5><p>Learn with others, ask questions, share tips, and access materials that support your growth beyond one assignment.</p></div></div>
-    </div>
-</section>
-
-<section class="mb-5">
-    <div class="row g-4">
-        <div class="col-lg-6">
-            <div class="card card-soft p-4 h-100">
-                <h3>Mission</h3>
-                <p>To empower university students by providing practical resources, reliable support, community interaction, and real-world solutions that make learning easier, faster, and more effective.</p>
-            </div>
-        </div>
-        <div class="col-lg-6">
-            <div class="card card-soft p-4 h-100">
-                <h3>Vision</h3>
-                <p>To become a leading student support platform in Zambia and beyond, where every student can access tools, knowledge, guidance, and community needed to succeed academically and build a strong future in technology.</p>
-            </div>
-        </div>
-    </div>
-</section>
-
-<section class="mb-5">
-    <div class="row g-4">
+<section class="hero mb-4">
+    <div class="row align-items-center">
         <div class="col-lg-8">
-            <div class="card card-soft p-4 p-lg-5">
-                <h2 class="fw-bold">What students can do on the platform</h2>
-                <div class="row g-3 mt-2">
-                    <div class="col-md-6"><div class="bg-light rounded-4 p-3 h-100">Browse downloadable projects by access level</div></div>
-                    <div class="col-md-6"><div class="bg-light rounded-4 p-3 h-100">Subscribe to Basic, Pro, or Elite plans</div></div>
-                    <div class="col-md-6"><div class="bg-light rounded-4 p-3 h-100">Read and download premium resources</div></div>
-                    <div class="col-md-6"><div class="bg-light rounded-4 p-3 h-100">Post questions and reply inside the community</div></div>
-                </div>
+            <span class="badge text-bg-warning text-dark mb-3">Real tutors • Academic plans • Guided support</span>
+            <h1 class="display-5 fw-bold">Academic support that feels real, human, and premium.</h1>
+            <p class="lead mb-4">Help students understand difficult work, connect with verified tutors, negotiate support budgets fairly, and reward progress with XP, levels, and study credits.</p>
+            <div class="d-flex gap-2 flex-wrap">
+                <a class="btn btn-warning btn-lg" href="<?= app_url('register.php') ?>">Create student account</a>
+                <a class="btn btn-outline-light btn-lg" href="<?= app_url('pricing.php') ?>">View academic plans</a>
             </div>
         </div>
-        <div class="col-lg-4">
-            <div class="card card-soft p-4 h-100">
-                <h4>Latest community topics</h4>
-                <ul class="list-clean mt-2">
-                    <?php foreach ($featuredTopics as $topic): ?>
-                        <li>
-                            <a class="text-decoration-none fw-semibold" href="<?= url('community/topic.php?id=' . (int)$topic['id']) ?>"><?= e($topic['title']) ?></a>
-                            <div class="small-muted"><?= e($topic['category']) ?> · by <?= e($topic['name']) ?></div>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-                <a class="btn btn-outline-primary mt-3" href="<?= url('community/index.php') ?>">Open Community</a>
+        <div class="col-lg-4 mt-4 mt-lg-0">
+            <div class="card card-soft p-3 text-dark">
+                <div class="section-title mb-3">Live academic snapshot</div>
+                <div class="d-flex justify-content-between mb-2"><span>Tutors available</span><strong><?= count_value("SELECT COUNT(*) FROM tutor_profiles WHERE is_verified = 1") ?></strong></div>
+                <div class="d-flex justify-content-between mb-2"><span>Help requests completed</span><strong><?= count_value("SELECT COUNT(*) FROM help_requests WHERE status = 'completed'") ?></strong></div>
+                <div class="d-flex justify-content-between mb-2"><span>Academic resources</span><strong><?= count_value("SELECT COUNT(*) FROM resources") ?></strong></div>
+                <div class="d-flex justify-content-between"><span>Active subscriptions</span><strong><?= count_value("SELECT COUNT(*) FROM user_subscriptions WHERE status = 'active' AND ends_at >= NOW()") ?></strong></div>
             </div>
         </div>
     </div>
 </section>
 
-<section>
-    <div class="card card-soft p-4 p-lg-5 text-center">
-        <h2 class="fw-bold">Ready to join the Student Hub?</h2>
-        <p class="mb-4">Create an account, explore free resources, join the community, and subscribe when you are ready for premium support.</p>
-        <div class="d-flex justify-content-center gap-2 flex-wrap">
-            <a class="btn btn-primary" href="<?= url('auth/register.php') ?>">Create Account</a>
-            <a class="btn btn-success" href="https://wa.me/<?= e(get_setting('site_whatsapp', '260963884318')) ?>" target="_blank">Chat on WhatsApp</a>
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="metric-card bg-white p-4 h-100">
+            <div class="section-title">Instant study assistance</div>
+            <p class="text-muted mb-0">Students can request urgent help, attach files, suggest a budget, and receive offers from tutors.</p>
         </div>
     </div>
+    <div class="col-md-4">
+        <div class="metric-card bg-white p-4 h-100">
+            <div class="section-title">Tutors earn with trust</div>
+            <p class="text-muted mb-0">Tutors set prices, counter offers, build ratings, and get paid after supported sessions are completed.</p>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="metric-card bg-white p-4 h-100">
+            <div class="section-title">Learning progress that matters</div>
+            <p class="text-muted mb-0">XP, streaks, and reward credits push students to stay engaged while keeping the experience academic first.</p>
+        </div>
+    </div>
+</div>
+
+<section class="mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="section-title mb-0">Featured tutors</h2>
+        <a href="<?= app_url('tutors.php') ?>" class="small">View all</a>
+    </div>
+    <div class="row g-3">
+        <?php foreach ($tutors as $tutor): ?>
+            <div class="col-md-6 col-lg-3">
+                <div class="card card-soft p-3 h-100">
+                    <img src="<?= e(avatar_url($tutor['avatar_path'])) ?>" class="avatar-md mb-3" alt="">
+                    <h3 class="h6 mb-1"><?= e($tutor['name']) ?></h3>
+                    <div class="small text-muted mb-2"><?= e($tutor['headline']) ?></div>
+                    <div class="small mb-2"><?= status_badge($tutor['is_verified'] ? 'verified' : 'pending') ?></div>
+                    <div class="small text-muted">Starting from <?= money($tutor['starting_price']) ?></div>
+                    <div class="small text-muted">Rating <?= number_format((float) $tutor['rating_average'], 1) ?>/5</div>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    </div>
 </section>
-<?php require_once __DIR__ . '/includes/footer.php'; ?>
+
+<section class="mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2 class="section-title mb-0">Fresh academic resources</h2>
+        <a href="<?= app_url('resources.php') ?>" class="small">Browse resources</a>
+    </div>
+    <div class="row g-3">
+        <?php foreach ($resources as $resource): ?>
+            <div class="col-md-4">
+                <div class="card card-soft p-4 h-100">
+                    <span class="tag-pill mb-3 d-inline-block"><?= e($resource['resource_type']) ?></span>
+                    <h3 class="h5"><?= e($resource['title']) ?></h3>
+                    <p class="text-muted mb-0"><?= e(substr(strip_tags((string) $resource['content']), 0, 130)) ?>...</p>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    </div>
+</section>
+<?php include __DIR__ . '/includes/footer.php'; ?>

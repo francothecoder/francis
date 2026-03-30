@@ -1,57 +1,62 @@
-FRANCIS KWESA - NATIVE PHP + MYSQL (UPDATED)
-============================================
+ACADEMIC SUPPORT HUB
+====================
 
-Included Features
------------------
-- public website pages
-- student registration and login
-- student dashboard
-- membership plans with subscription request flow
-- admin approval of subscriptions
-- payment recording
-- projects library with access levels and protected downloads
-- resources section with protected downloads
-- support request system with threaded replies
-- community section with topics, comments, and replies
-- admin dashboard
-- admin management for users, projects, resources, support, community, and contact messages
+A native PHP academic support platform with:
 
-Quick Setup (XAMPP / Windows)
------------------------------
-1. Extract this project into htdocs, for example:
-   C:\xampp\htdocs\francis
+- student / tutor / admin roles
+- tutor verification
+- student help requests
+- tutor offers
+- accepted session workflow
+- session chat thread
+- monthly academic subscriptions
+- XP, levels, reward credits
+- tutor ratings
+- platform commission control
+- payout requests and admin payout approval
+- academic resources module
 
-2. IMPORTANT:
-   Open config/config.php and make sure:
-   $baseUrl = '/francis';
-   matches your actual folder name in htdocs.
-
-3. Start Apache and MySQL in XAMPP.
-
-4. Create a new empty MySQL database in phpMyAdmin.
-   Example: franciskwesa_db
-
-5. Open the installer in your browser:
-   http://localhost/francis/install.php
-
-6. Enter your database details and click Install Now.
-
-7. Open the site homepage:
-   http://localhost/francis/
-
-Demo Login
-----------
-Admin:
-- Email: admin@franciskwesa.com
-- Password: password123
-
-Student:
-- Email: student@example.com
-- Password: student123
-
-Notes
+SETUP
 -----
-- Make sure PHP has pdo_mysql enabled.
-- Uploaded project files go into /uploads/projects
-- Uploaded resource files go into /uploads/resources
-- Subscription approval is manual from the admin dashboard
+1. Create a MySQL database.
+2. Edit config/database.php with your database credentials.
+3. Import database.sql into the database.
+4. Copy the folder to your web root.
+5. Update BASE_URL in config/config.php if your folder name is different.
+6. Login with seeded accounts below.
+
+DEMO ACCOUNTS
+-------------
+Admin
+Email: admin@academicsupporthub.com
+Password: password123
+
+Student
+Email: student@example.com
+Password: student123
+
+Tutor
+Email: tutor@example.com
+Password: tutor12345
+
+NOTES
+-----
+- This package uses manual internal payment records, not live mobile money APIs.
+- File uploads are validated by extension, MIME type, and size.
+- CSRF protection is enabled for all major forms.
+- This is a strong native PHP starter for production-minded deployment, but before live launch you should still add:
+  - HTTPS on hosting
+  - stronger audit logging
+  - email notifications
+  - payment gateway integration
+  - cron tasks for expiring subscriptions
+  - server hardening and backup automation
+
+FOLDER HIGHLIGHTS
+-----------------
+/admin      platform control
+/student    student workflows
+/tutor      tutor workflows
+/includes   shared bootstrap, helpers, layout
+/config     database configuration
+/database.sql full schema + seed data
