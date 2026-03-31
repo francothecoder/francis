@@ -30,7 +30,7 @@ include __DIR__ . '/includes/header.php';
 <section class="mb-4">
     <div class="row g-3">
         <div class="col-md-4"><div class="metric-card"><div class="stat-muted">Guided learning</div><div class="metric-value">1-on-1</div><div class="text-muted">Structured tutor sessions and progress-aware study support.</div></div></div>
-        <div class="col-md-4"><div class="metric-card"><div class="stat-muted">Payments</div><div class="metric-value">Lenco</div><div class="text-muted">MTN, Airtel, and Zamtel mobile money workflow built in.</div></div></div>
+        <div class="col-md-4"><div class="metric-card"><div class="stat-muted">Payments</div><div class="metric-value">Easy Payments</div><div class="text-muted">MTN, Airtel, and Zamtel mobile money workflow built in.</div></div></div>
         <div class="col-md-4"><div class="metric-card"><div class="stat-muted">Engagement</div><div class="metric-value">XP + rewards</div><div class="text-muted">Students and tutors earn progress and incentive-based rewards.</div></div></div>
     </div>
 </section>
