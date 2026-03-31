@@ -3,7 +3,8 @@ require_once __DIR__ . '/../includes/bootstrap.php';
 require_role(['tutor']);
 $user = current_user();
 $profile = tutor_profile((int) $user['id']);
-$walletBalance = scalar_value("SELECT COALESCE(SUM(CASE WHEN transaction_type = 'credit' THEN amount ELSE -amount END),0) FROM tutor_wallet_transactions WHERE tutor_id = :tutor_id", ['tutor_id' => $user['id']]);
+$summary = payout_summary((int) $user['id']);
+$walletBalance = $summary['available'];
 $sessionCount = count_value("SELECT COUNT(*) FROM study_sessions WHERE tutor_id = :tutor_id", ['tutor_id' => $user['id']]);
 $activeSessions = $pdo->prepare("SELECT ss.*, hr.title, hr.subject, u.name AS student_name
     FROM study_sessions ss
@@ -17,17 +18,20 @@ $sessions = $activeSessions->fetchAll();
 $pageTitle = 'Tutor dashboard';
 include __DIR__ . '/../includes/header.php';
 ?>
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <div>
         <h1 class="h3 mb-1">Tutor dashboard</h1>
         <div class="text-muted">Manage your offers, study sessions, earnings, and tutoring profile.</div>
     </div>
-    <a class="btn btn-primary" href="<?= app_url('tutor/help_board.php') ?>">Open help board</a>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-primary" href="<?= app_url('tutor/request_payout.php') ?>">Withdraw earnings</a>
+        <a class="btn btn-primary" href="<?= app_url('tutor/help_board.php') ?>">Open help board</a>
+    </div>
 </div>
 <div class="row g-3 mb-4">
     <div class="col-md-3"><div class="metric-card bg-white p-4"><div class="text-muted">Wallet balance</div><div class="metric-value"><?= money($walletBalance) ?></div></div></div>
-    <div class="col-md-3"><div class="metric-card bg-white p-4"><div class="text-muted">Rating</div><div class="metric-value"><?= number_format((float) ($profile['rating_average'] ?? 0), 1) ?></div></div></div>
-    <div class="col-md-3"><div class="metric-card bg-white p-4"><div class="text-muted">Total sessions</div><div class="metric-value"><?= $sessionCount ?></div></div></div>
+    <div class="col-md-3"><div class="metric-card bg-white p-4"><div class="text-muted">Awaiting payout</div><div class="metric-value"><?= money($summary['requested'] + $summary['approved']) ?></div></div></div>
+    <div class="col-md-3"><div class="metric-card bg-white p-4"><div class="text-muted">Total withdrawn</div><div class="metric-value"><?= money($summary['paid']) ?></div></div></div>
     <div class="col-md-3"><div class="metric-card bg-white p-4"><div class="text-muted">Status</div><div class="metric-value"><?= !empty($profile['is_verified']) ? 'Verified' : 'Pending' ?></div></div></div>
 </div>
 <div class="row g-3">

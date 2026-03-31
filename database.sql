@@ -195,13 +195,19 @@ CREATE TABLE payment_transactions (
     gateway_payload LONGTEXT NULL,
     status ENUM('pending','held','released','paid','failed','refunded') NOT NULL DEFAULT 'pending',
     notes VARCHAR(255) NULL,
+    manual_reference VARCHAR(100) NULL,
+    manual_proof_path VARCHAR(255) NULL,
+    approved_by INT UNSIGNED NULL,
+    approved_at DATETIME NULL,
+    approval_notes VARCHAR(255) NULL,
     paid_at DATETIME NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_payment_transactions_request FOREIGN KEY (request_id) REFERENCES help_requests(id) ON DELETE SET NULL,
     CONSTRAINT fk_payment_transactions_session FOREIGN KEY (session_id) REFERENCES study_sessions(id) ON DELETE SET NULL,
     CONSTRAINT fk_payment_transactions_plan FOREIGN KEY (plan_id) REFERENCES subscription_plans(id) ON DELETE SET NULL,
     CONSTRAINT fk_payment_transactions_student FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_payment_transactions_tutor FOREIGN KEY (tutor_id) REFERENCES users(id) ON DELETE SET NULL
+    CONSTRAINT fk_payment_transactions_tutor FOREIGN KEY (tutor_id) REFERENCES users(id) ON DELETE SET NULL,
+    CONSTRAINT fk_payment_transactions_approved_by FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE tutor_wallet_transactions (
@@ -220,10 +226,17 @@ CREATE TABLE payout_requests (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     tutor_id INT UNSIGNED NOT NULL,
     amount DECIMAL(10,2) NOT NULL,
-    status ENUM('requested','paid','rejected') NOT NULL DEFAULT 'requested',
+    provider VARCHAR(20) NULL,
+    mobile_number VARCHAR(30) NULL,
+    notes VARCHAR(255) NULL,
+    admin_notes VARCHAR(255) NULL,
+    status ENUM('requested','approved','paid','rejected') NOT NULL DEFAULT 'requested',
+    approved_by INT UNSIGNED NULL,
     requested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    approved_at DATETIME NULL,
     paid_at DATETIME NULL,
-    CONSTRAINT fk_payout_requests_tutor FOREIGN KEY (tutor_id) REFERENCES users(id) ON DELETE CASCADE
+    CONSTRAINT fk_payout_requests_tutor FOREIGN KEY (tutor_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_payout_requests_approved_by FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE tutor_ratings (

@@ -46,3 +46,24 @@ Premium update notes (payments + email)
 - Webhook payloads are logged to logs/lenco_webhook.log for troubleshooting.
 - PHPMailer is bundled in vendor/phpmailer/src and SMTP settings are available in Admin > Settings.
 - To enable emails, fill SMTP host, port, username, password, from email/name, then turn on SMTP and email notifications.
+
+
+UPDATE NOTES (Retry-safe payments + manual approval)
+---------------------------------------------------
+- Every retry now creates a fresh payment transaction with a new unique gateway reference.
+- Manual admin approval is available for both subscriptions and help-request payments.
+- Students can upload manual payment proof or submit a manual transaction reference.
+- Admin can review and approve/reject from admin/payments.php.
+- Payment proof uploads are stored in uploads/payment_proofs/.
+- New payment transaction columns were added:
+  manual_reference, manual_proof_path, approved_by, approved_at, approval_notes
+
+If you are upgrading an existing live database, add these columns manually or re-import database.sql.
+
+
+WITHDRAWAL SYSTEM UPDATE
+- Tutors can request withdrawals from tutor/request_payout.php
+- Withdrawal requests reserve wallet funds immediately
+- Admin can approve, reject, or mark withdrawals as paid from admin/payouts.php
+- Rejected withdrawals automatically restore reserved funds to the tutor wallet
+- If upgrading an existing database, add the new payout_requests columns: provider, mobile_number, notes, admin_notes, approved_by, approved_at and extend status to include approved

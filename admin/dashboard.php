@@ -28,6 +28,7 @@ include __DIR__ . '/../includes/header.php';
                 <a class="btn btn-outline-primary" href="<?= app_url('admin/tutors.php') ?>">Manage tutors</a>
                 <a class="btn btn-outline-primary" href="<?= app_url('admin/help_requests.php') ?>">View help requests</a>
                 <a class="btn btn-outline-primary" href="<?= app_url('admin/subscriptions.php') ?>">Subscriptions</a>
+                <a class="btn btn-outline-primary" href="<?= app_url('admin/payments.php') ?>">Payments</a>
                 <a class="btn btn-outline-primary" href="<?= app_url('admin/payouts.php') ?>">Tutor payouts</a>
                 <a class="btn btn-outline-primary" href="<?= app_url('admin/resources.php') ?>">Resources</a>
             </div>

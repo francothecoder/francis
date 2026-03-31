@@ -172,6 +172,121 @@ function provider_label(string $provider): string
     return ['mtn' => 'MTN', 'airtel' => 'AIRTEL', 'zamtel' => 'ZAMTEL'][$provider] ?? strtoupper($provider);
 }
 
+
+function generate_unique_gateway_reference(string $prefix = 'REQ-'): string
+{
+    global $pdo;
+    $prefix = strtoupper(trim($prefix));
+    if ($prefix === '') $prefix = 'REQ-';
+    do {
+        $reference = $prefix . strtoupper(bin2hex(random_bytes(6)));
+        $stmt = $pdo->prepare('SELECT COUNT(*) FROM payment_transactions WHERE gateway_reference = :reference');
+        $stmt->execute(['reference' => $reference]);
+        $exists = (int) $stmt->fetchColumn() > 0;
+    } while ($exists);
+    return $reference;
+}
+
+function uploaded_payment_proof_path(?array $file): ?string
+{
+    if (!$file) return null;
+    return upload_file(
+        $file,
+        'payment_proofs',
+        ['jpg','jpeg','png','pdf','webp'],
+        ['image/jpeg','image/png','application/pdf','image/webp'],
+        6 * 1024 * 1024
+    );
+}
+
+function create_help_request_payment_transaction(int $requestId, int $studentId, int $tutorId, float $finalAmount, float $baseAmount, float $discountAmount, float $rewardCreditValue, float $platformFee, float $tutorEarnings, string $provider, string $phoneNumber, string $gateway = 'lenco', ?string $notes = null, ?string $manualReference = null, ?string $manualProofPath = null): int
+{
+    global $pdo;
+    $reference = generate_unique_gateway_reference('REQ-');
+    $gatewayStatus = $gateway === 'manual' ? 'submitted' : 'pending';
+    $status = $gateway === 'manual' ? 'held' : 'pending';
+    $stmt = $pdo->prepare('INSERT INTO payment_transactions (request_id, student_id, tutor_id, payment_type, amount, base_amount, discount_amount, reward_credit_value, platform_fee, tutor_earnings, provider, phone_number, gateway, gateway_reference, gateway_status, status, notes, manual_reference, manual_proof_path) VALUES (:request_id, :student_id, :tutor_id, "help_request", :amount, :base_amount, :discount_amount, :reward_credit_value, :platform_fee, :tutor_earnings, :provider, :phone_number, :gateway, :gateway_reference, :gateway_status, :status, :notes, :manual_reference, :manual_proof_path)');
+    $stmt->execute([
+        'request_id' => $requestId,
+        'student_id' => $studentId,
+        'tutor_id' => $tutorId,
+        'amount' => round($finalAmount, 2),
+        'base_amount' => round($baseAmount, 2),
+        'discount_amount' => round($discountAmount, 2),
+        'reward_credit_value' => round($rewardCreditValue, 2),
+        'platform_fee' => round($platformFee, 2),
+        'tutor_earnings' => round($tutorEarnings, 2),
+        'provider' => $provider,
+        'phone_number' => $phoneNumber,
+        'gateway' => $gateway,
+        'gateway_reference' => $reference,
+        'gateway_status' => $gatewayStatus,
+        'status' => $status,
+        'notes' => $notes,
+        'manual_reference' => $manualReference,
+        'manual_proof_path' => $manualProofPath,
+    ]);
+    return (int) $pdo->lastInsertId();
+}
+
+function create_subscription_payment_transaction(int $planId, int $studentId, float $amount, string $provider, string $phoneNumber, string $gateway = 'lenco', ?string $notes = null, ?string $manualReference = null, ?string $manualProofPath = null): int
+{
+    global $pdo;
+    $reference = generate_unique_gateway_reference('SUB-');
+    $gatewayStatus = $gateway === 'manual' ? 'submitted' : 'pending';
+    $status = $gateway === 'manual' ? 'held' : 'pending';
+    $stmt = $pdo->prepare('INSERT INTO payment_transactions (plan_id, student_id, payment_type, amount, base_amount, provider, phone_number, gateway, gateway_reference, gateway_status, status, notes, manual_reference, manual_proof_path) VALUES (:plan_id, :student_id, "subscription", :amount, :base_amount, :provider, :phone_number, :gateway, :gateway_reference, :gateway_status, :status, :notes, :manual_reference, :manual_proof_path)');
+    $stmt->execute([
+        'plan_id' => $planId,
+        'student_id' => $studentId,
+        'amount' => round($amount, 2),
+        'base_amount' => round($amount, 2),
+        'provider' => $provider,
+        'phone_number' => $phoneNumber,
+        'gateway' => $gateway,
+        'gateway_reference' => $reference,
+        'gateway_status' => $gatewayStatus,
+        'status' => $status,
+        'notes' => $notes,
+        'manual_reference' => $manualReference,
+        'manual_proof_path' => $manualProofPath,
+    ]);
+    return (int) $pdo->lastInsertId();
+}
+
+function admin_finalize_payment(int $paymentId, int $adminId, bool $approve, ?string $note = null): void
+{
+    global $pdo;
+    $stmt = $pdo->prepare('SELECT * FROM payment_transactions WHERE id = :id LIMIT 1');
+    $stmt->execute(['id' => $paymentId]);
+    $payment = $stmt->fetch();
+    if (!$payment) throw new RuntimeException('Payment not found.');
+    if ($approve) {
+        $pdo->prepare("UPDATE payment_transactions SET status='paid', gateway_status='approved', paid_at = NOW(), approved_by = :approved_by, approved_at = NOW(), approval_notes = :approval_notes WHERE id = :id")->execute([
+            'approved_by' => $adminId,
+            'approval_notes' => $note,
+            'id' => $paymentId,
+        ]);
+        if (!empty($payment['plan_id'])) {
+            activate_subscription_from_payment($paymentId);
+            create_notification((int) $payment['student_id'], 'Payment approved', 'Your subscription payment was approved manually by the admin team.', 'student/subscriptions.php');
+        } else {
+            activate_session_from_payment($paymentId);
+            create_notification((int) $payment['student_id'], 'Payment approved', 'Your academic help payment was approved manually. Your study session is now available.', 'student/request_view.php?id=' . (int) $payment['request_id']);
+            if (!empty($payment['tutor_id'])) {
+                create_notification((int) $payment['tutor_id'], 'Manual payment approved', 'A student payment was approved manually. Please proceed with the guided support session.', 'tutor/session_view.php?request_id=' . (int) $payment['request_id']);
+            }
+        }
+    } else {
+        $pdo->prepare("UPDATE payment_transactions SET status='failed', gateway_status='rejected', approved_by = :approved_by, approved_at = NOW(), approval_notes = :approval_notes WHERE id = :id")->execute([
+            'approved_by' => $adminId,
+            'approval_notes' => $note,
+            'id' => $paymentId,
+        ]);
+        create_notification((int) $payment['student_id'], 'Payment rejected', 'Your manual payment submission was not approved. Please review the note from admin and retry.', !empty($payment['plan_id']) ? 'student/subscriptions.php' : 'student/payment_status.php?payment_id=' . $paymentId);
+    }
+}
+
 function payment_gateway_public_message(array $gatewayResponse): string
 {
     $data = $gatewayResponse['data'] ?? [];
@@ -420,7 +535,9 @@ function calculate_final_help_price(float $basePrice, int $studentId, int $rewar
 
 function create_notification(int $userId, string $title, string $message, ?string $targetPath = null): void
 {
-    global $pdo; $pdo->prepare('INSERT INTO notifications (user_id,title,message,target_path) VALUES (:user_id,:title,:message,:target_path)')->execute(['user_id'=>$userId,'title'=>$title,'message'=>$message,'target_path'=>$targetPath]);
+    global $pdo;
+    $pdo->prepare('INSERT INTO notifications (user_id,title,message,target_path) VALUES (:user_id,:title,:message,:target_path)')->execute(['user_id'=>$userId,'title'=>$title,'message'=>$message,'target_path'=>$targetPath]);
+    send_user_notification_email($userId, $title, $message, $targetPath);
 }
 function unread_notification_count(int $userId): int { return count_value('SELECT COUNT(*) FROM notifications WHERE user_id = :user_id AND is_read = 0',['user_id'=>$userId]); }
 function recent_notifications(int $userId, int $limit = 6): array { global $pdo; $stmt=$pdo->prepare('SELECT * FROM notifications WHERE user_id = :user_id ORDER BY id DESC LIMIT '.(int)$limit); $stmt->execute(['user_id'=>$userId]); return $stmt->fetchAll(); }
@@ -441,6 +558,25 @@ function payment_for_subscription(int $userId, int $planId): ?array { global $pd
 function tutor_wallet_balance(int $tutorId): float
 {
     return (float) scalar_value("SELECT COALESCE(SUM(CASE WHEN transaction_type='credit' THEN amount ELSE -amount END),0) FROM tutor_wallet_transactions WHERE tutor_id = :tutor_id", ['tutor_id'=>$tutorId]);
+}
+
+function pending_payout_amount(int $tutorId): float
+{
+    return (float) scalar_value("SELECT COALESCE(SUM(amount),0) FROM payout_requests WHERE tutor_id = :tutor_id AND status IN ('requested','approved')", ['tutor_id' => $tutorId]);
+}
+
+function payout_summary(int $tutorId): array
+{
+    $available = tutor_wallet_balance($tutorId);
+    $requested = (float) scalar_value("SELECT COALESCE(SUM(amount),0) FROM payout_requests WHERE tutor_id = :tutor_id AND status = 'requested'", ['tutor_id' => $tutorId]);
+    $approved = (float) scalar_value("SELECT COALESCE(SUM(amount),0) FROM payout_requests WHERE tutor_id = :tutor_id AND status = 'approved'", ['tutor_id' => $tutorId]);
+    $paid = (float) scalar_value("SELECT COALESCE(SUM(amount),0) FROM payout_requests WHERE tutor_id = :tutor_id AND status = 'paid'", ['tutor_id' => $tutorId]);
+    return [
+        'available' => round($available, 2),
+        'requested' => round($requested, 2),
+        'approved' => round($approved, 2),
+        'paid' => round($paid, 2),
+    ];
 }
 
 function relative_time(?string $datetime): string
@@ -560,6 +696,7 @@ function sync_payment_status(int $paymentId): array
     $stmt->execute(['id'=>$paymentId]);
     $payment = $stmt->fetch();
     if (!$payment) throw new RuntimeException('Payment not found.');
+    if (($payment['gateway'] ?? 'lenco') === 'manual') return $payment;
     if (!$payment['gateway_reference']) return $payment;
     $response = requery_lenco_collection((string)$payment['gateway_reference']);
     update_payment_gateway_snapshot($paymentId, $response);
@@ -568,11 +705,14 @@ function sync_payment_status(int $paymentId): array
         $pdo->prepare("UPDATE payment_transactions SET status='paid', paid_at = NOW() WHERE id = :id")->execute(['id'=>$paymentId]);
         if (!empty($payment['plan_id'])) {
             activate_subscription_from_payment($paymentId);
+            create_notification((int)$payment['student_id'], 'Subscription paid', 'Your subscription payment was confirmed successfully.', 'student/subscriptions.php');
         } else {
             activate_session_from_payment($paymentId);
+            create_notification((int)$payment['student_id'], 'Payment confirmed', 'Your academic help payment was confirmed successfully.', 'student/request_view.php?id=' . (int)$payment['request_id']);
         }
     } elseif ($status === 'failed') {
         $pdo->prepare("UPDATE payment_transactions SET status='failed' WHERE id = :id")->execute(['id'=>$paymentId]);
+        create_notification((int)$payment['student_id'], 'Payment failed', trim((string)($response['data']['reasonForFailure'] ?? 'Your mobile money payment failed. Please retry or use manual approval.')), 'student/payment_status.php?payment_id=' . $paymentId);
     } else {
         $pdo->prepare("UPDATE payment_transactions SET status='pending' WHERE id = :id")->execute(['id'=>$paymentId]);
     }
