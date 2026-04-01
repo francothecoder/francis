@@ -102,6 +102,7 @@ include __DIR__ . '/../includes/header.php';
             <?php if ($latestPayment && in_array($latestPayment['status'], ['failed','held','pending'], true)): ?>
                 <div class="alert alert-warning border-0">A previous payment attempt exists. Any new retry from this page will create a <strong>fresh payment reference</strong> automatically.</div>
             <?php endif; ?>
+            <div class="alert alert-warning border-0 mt-3"><strong>Security tip:</strong> Never send payment outside this platform. All subscriptions, academic help payments, and manual approval proofs must be submitted here so your transaction can be tracked and protected.</div>
             <div class="row g-3 mb-4">
                 <div class="col-md-6"><div class="border rounded-4 p-3 h-100"><div class="stat-muted">Tutor</div><div class="fw-semibold"><?= e($offer['tutor_name']) ?></div><div class="small text-muted mt-2"><?= e($request['title']) ?></div></div></div>
                 <div class="col-md-6"><div class="border rounded-4 p-3 h-100"><div class="stat-muted">Pricing breakdown</div><div class="small text-muted">Base price <?= money($offer['offered_amount']) ?></div><div class="small text-muted">Plan discount <?= money($pricing['discount_amount']) ?></div><div class="small text-muted">Reward credits <?= money($pricing['reward_credit_value']) ?></div><div class="fw-semibold mt-2">Final amount <?= money($pricing['final_price']) ?></div></div></div>

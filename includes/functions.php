@@ -146,6 +146,86 @@ function smtp_reply_to_email(): string { return get_setting('smtp_reply_to_email
 function smtp_reply_to_name(): string { return get_setting('smtp_reply_to_name', smtp_from_name()); }
 function email_notifications_enabled(): bool { return get_setting('email_notifications_enabled', '1') === '1'; }
 
+function strong_password_message(): string
+{
+    return 'Password must be at least 8 characters.';
+}
+
+function base_email_shell(string $title, string $bodyHtml, ?string $buttonLabel = null, ?string $buttonUrl = null): string
+{
+    $platform = e(get_setting('platform_name', APP_NAME));
+    $button = '';
+    if ($buttonLabel && $buttonUrl) {
+        $button = '<p style="margin:20px 0 0"><a href="' . e($buttonUrl) . '" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:10px;font-weight:700">' . e($buttonLabel) . '</a></p>';
+    }
+    return '<div style="font-family:Inter,Arial,sans-serif;background:#f8fafc;padding:24px">'
+        . '<div style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:18px;padding:28px;border:1px solid #e2e8f0">'
+        . '<div style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#64748b;margin-bottom:10px">' . $platform . '</div>'
+        . '<h2 style="margin:0 0 12px;color:#0f172a">' . e($title) . '</h2>'
+        . $bodyHtml
+        . $button
+        . '<p style="margin:20px 0 0;color:#94a3b8;font-size:13px">This email was sent by ' . $platform . '.</p>'
+        . '</div></div>';
+}
+
+function admin_users(): array
+{
+    global $pdo;
+    return $pdo->query("SELECT id, name, email FROM users WHERE role = 'admin' ORDER BY id ASC")->fetchAll();
+}
+
+function notify_admins_about_registration(array $user): void
+{
+    foreach (admin_users() as $admin) {
+        $message = $user['name'] . ' created a new ' . $user['role'] . ' account.'
+            . (!empty($user['phone_number']) ? ' Phone: ' . $user['phone_number'] . '.' : '')
+            . (!empty($user['email']) ? ' Email: ' . $user['email'] . '.' : '');
+        create_notification((int) $admin['id'], 'New user registration', $message, 'admin/dashboard.php');
+    }
+}
+
+function create_password_reset_token(int $userId): string
+{
+    global $pdo;
+    $token = bin2hex(random_bytes(32));
+    $pdo->prepare('DELETE FROM password_resets WHERE user_id = :user_id OR expires_at < NOW()')->execute(['user_id' => $userId]);
+    $pdo->prepare('INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (:user_id, :token_hash, DATE_ADD(NOW(), INTERVAL 60 MINUTE))')->execute([
+        'user_id' => $userId,
+        'token_hash' => password_hash($token, PASSWORD_DEFAULT),
+    ]);
+    return $token;
+}
+
+function find_valid_password_reset(string $token): ?array
+{
+    global $pdo;
+    $stmt = $pdo->query('SELECT pr.*, u.email, u.name FROM password_resets pr INNER JOIN users u ON u.id = pr.user_id WHERE pr.used_at IS NULL AND pr.expires_at > NOW() ORDER BY pr.id DESC');
+    foreach ($stmt->fetchAll() as $row) {
+        if (password_verify($token, (string) $row['token_hash'])) {
+            return $row;
+        }
+    }
+    return null;
+}
+
+function mark_password_reset_used(int $resetId): void
+{
+    global $pdo;
+    $pdo->prepare('UPDATE password_resets SET used_at = NOW() WHERE id = :id')->execute(['id' => $resetId]);
+}
+
+function send_password_reset_email(array $user, string $token): void
+{
+    if (!validate_email((string) ($user['email'] ?? ''))) {
+        return;
+    }
+    $link = app_url('reset_password.php?token=' . urlencode($token));
+    $body = '<p style="margin:0 0 18px;color:#475569;line-height:1.7">We received a request to reset your password. This secure link expires in 60 minutes.</p>'
+        . '<p style="margin:0 0 18px;color:#475569;line-height:1.7">If you did not request this change, you can safely ignore this email.</p>';
+    $html = base_email_shell('Reset your password', $body, 'Choose a new password', $link);
+    send_platform_email((string) $user['email'], (string) $user['name'], 'Password reset · ' . get_setting('platform_name', APP_NAME), $html, 'Reset your password: ' . $link);
+}
+
 function normalize_zambian_phone(string $phone): string
 {
     $digits = preg_replace('/\D+/', '', $phone) ?? '';
@@ -367,13 +447,8 @@ function send_user_notification_email(int $userId, string $title, string $messag
     }
     $link = $targetPath ? app_url($targetPath) : app_url();
     $platform = get_setting('platform_name', APP_NAME);
-    $html = '<div style="font-family:Inter,Arial,sans-serif;background:#f8fafc;padding:24px">'
-        . '<div style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:18px;padding:28px;border:1px solid #e2e8f0">'
-        . '<h2 style="margin:0 0 12px;color:#0f172a">' . e($title) . '</h2>'
-        . '<p style="margin:0 0 18px;color:#475569;line-height:1.7">' . nl2br(e($message)) . '</p>'
-        . '<p style="margin:0 0 18px"><a href="' . e($link) . '" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:10px;font-weight:700">Open ' . e($platform) . '</a></p>'
-        . '<p style="margin:0;color:#94a3b8;font-size:13px">This email was sent by ' . e($platform) . '.</p>'
-        . '</div></div>';
+    $body = '<p style="margin:0 0 18px;color:#475569;line-height:1.7">' . nl2br(e($message)) . '</p>';
+    $html = base_email_shell($title, $body, 'Open ' . $platform, $link);
     send_platform_email((string) $user['email'], (string) $user['name'], $title . ' · ' . $platform, $html, $message . PHP_EOL . $link);
 }
 
@@ -464,7 +539,7 @@ function student_discount_percent(int $userId): float { $subscription = current_
 function tutor_profile(int $userId): ?array
 {
     global $pdo;
-    $stmt = $pdo->prepare("SELECT tp.*, u.name, u.email, u.avatar_path FROM tutor_profiles tp INNER JOIN users u ON u.id = tp.user_id WHERE tp.user_id = :user_id LIMIT 1");
+    $stmt = $pdo->prepare("SELECT tp.*, u.name, u.email, u.phone_number, u.university, u.bio AS user_bio, u.avatar_path FROM tutor_profiles tp INNER JOIN users u ON u.id = tp.user_id WHERE tp.user_id = :user_id LIMIT 1");
     $stmt->execute(['user_id' => $userId]);
     return $stmt->fetch() ?: null;
 }

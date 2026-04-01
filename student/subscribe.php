@@ -76,6 +76,7 @@ include __DIR__ . '/../includes/header.php';
         <div class="card card-soft p-4">
             <div class="d-flex justify-content-between align-items-start gap-3 mb-3"><div><h1 class="h3 mb-1">Activate <?= e($plan['name']) ?></h1><div class="text-muted">Pay with Lenco mobile money or submit proof for manual approval.</div></div><div class="display-6 fw-bold"><?= money($plan['monthly_price']) ?></div></div>
             <?php if ($existing && in_array($existing['status'], ['failed','held','pending'], true)): ?><div class="alert alert-warning border-0">A previous payment attempt exists. Any retry here will use a <strong>fresh payment reference</strong>.</div><?php endif; ?>
+            <div class="alert alert-warning border-0"><strong>Security tip:</strong> Never pay tutors or subscriptions outside this platform. Keep every payment attempt, proof upload, and approval inside the platform so it can be tracked and protected.</div>
             <form method="post" enctype="multipart/form-data" id="subscriptionPaymentForm">
                 <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>"><input type="hidden" name="plan_id" value="<?= (int)$plan['id'] ?>">
                 <div class="mb-3">

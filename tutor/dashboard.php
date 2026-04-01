@@ -25,6 +25,7 @@ include __DIR__ . '/../includes/header.php';
     </div>
     <div class="d-flex gap-2">
         <a class="btn btn-outline-primary" href="<?= app_url('tutor/request_payout.php') ?>">Withdraw earnings</a>
+        <a class="btn btn-outline-secondary" href="<?= app_url('profile.php') ?>">Edit full profile</a>
         <a class="btn btn-primary" href="<?= app_url('tutor/help_board.php') ?>">Open help board</a>
     </div>
 </div>
@@ -55,6 +56,10 @@ include __DIR__ . '/../includes/header.php';
                 <div class="mb-3">
                     <label class="form-label">Minimum offer price</label>
                     <input class="form-control" type="number" step="0.01" min="1" name="min_offer_price" value="<?= e((string) ($profile['min_offer_price'] ?? '15')) ?>" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Qualification details</label>
+                    <textarea class="form-control" name="qualification_details" rows="3" required><?= e($profile['qualification_details'] ?? '') ?></textarea>
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Bio</label>

@@ -16,6 +16,7 @@ DROP TABLE IF EXISTS subscription_plans;
 DROP TABLE IF EXISTS xp_transactions;
 DROP TABLE IF EXISTS user_rewards;
 DROP TABLE IF EXISTS tutor_profiles;
+DROP TABLE IF EXISTS password_resets;
 DROP TABLE IF EXISTS settings;
 DROP TABLE IF EXISTS users;
 SET FOREIGN_KEY_CHECKS = 1;
@@ -26,10 +27,22 @@ CREATE TABLE users (
     email VARCHAR(190) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
     role ENUM('admin','student','tutor') NOT NULL DEFAULT 'student',
+    phone_number VARCHAR(25) NULL,
     university VARCHAR(190) NULL,
     bio TEXT NULL,
     avatar_path VARCHAR(255) NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE password_resets (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id INT UNSIGNED NOT NULL,
+    token_hash VARCHAR(255) NOT NULL,
+    expires_at DATETIME NOT NULL,
+    used_at DATETIME NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_password_resets_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE settings (
@@ -44,6 +57,7 @@ CREATE TABLE tutor_profiles (
     headline VARCHAR(190) NOT NULL,
     bio TEXT NOT NULL,
     subjects VARCHAR(255) NOT NULL,
+    qualification_details TEXT NULL,
     starting_price DECIMAL(10,2) NOT NULL DEFAULT 25.00,
     min_offer_price DECIMAL(10,2) NOT NULL DEFAULT 15.00,
     rating_average DECIMAL(3,2) NOT NULL DEFAULT 0,

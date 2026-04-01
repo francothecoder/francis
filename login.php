@@ -63,7 +63,7 @@ include __DIR__ . '/includes/header.php';
                 </div>
                 <button class="btn btn-primary w-100">Login</button>
             </form>
-            <p class="small text-muted mt-3 mb-0">New here? <a href="<?= app_url('register.php') ?>">Create an account</a></p>
+            <div class="d-flex justify-content-between small text-muted mt-3"><span>New here? <a href="<?= app_url('register.php') ?>">Create an account</a></span><a href="<?= app_url('forgot_password.php') ?>">Forgot password?</a></div>
         </div>
     </div>
 </div>

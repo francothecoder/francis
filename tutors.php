@@ -25,6 +25,7 @@ include __DIR__ . '/includes/header.php';
                 </div>
                 <p class="text-muted"><?= e($tutor['bio']) ?></p>
                 <div class="small mb-2"><strong>Subjects:</strong> <?= e($tutor['subjects']) ?></div>
+                <?php if (!empty($tutor['qualification_details'])): ?><div class="small mb-2"><strong>Qualifications:</strong> <?= e($tutor['qualification_details']) ?></div><?php endif; ?>
                 <div class="small mb-3"><strong>Starts from:</strong> <?= money($tutor['starting_price']) ?> · <strong>Minimum offer:</strong> <?= money($tutor['min_offer_price']) ?></div>
                 <div class="small text-muted">Completed sessions: <?= (int) $tutor['total_sessions'] ?></div>
             </div>

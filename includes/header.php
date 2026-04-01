@@ -47,6 +47,7 @@ $platformName = get_setting('platform_name', APP_NAME);
                             <?php endif; ?>
                         </div>
                     </li>
+                    <li class="nav-item"><a class="nav-link text-white-50" href="<?= app_url('profile.php') ?>">My profile</a></li>
                     <li class="nav-item"><span class="nav-link text-white-50"><?= e($user['name']) ?></span></li>
                     <?php if ($user['role'] === 'admin'): ?>
                         <li class="nav-item"><a class="btn btn-light btn-sm rounded-pill px-3" href="<?= app_url('admin/dashboard.php') ?>">Admin</a></li>
